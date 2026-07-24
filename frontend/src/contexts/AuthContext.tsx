@@ -7,6 +7,7 @@ interface AuthContextType {
   masterPassword: string | null;
   isAuthenticated: boolean;
   isSetup: boolean;
+  isCheckingSetup: boolean;
   isBiometricEnabled: boolean;
   login: (password: string) => Promise<void>;
   logout: () => void;
@@ -22,25 +23,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [masterPassword, setMasterPassword] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSetup, setIsSetup] = useState(false);
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
 
   useEffect(() => {
-    checkSetup();
-    checkBiometricEnabled();
+    initializeAuth();
   }, []);
 
+  const initializeAuth = async () => {
+    await checkSetup();
+    await checkBiometricEnabled();
+    setIsCheckingSetup(false);
+  };
+
   const checkSetup = async () => {
-    try {
-      const result = await api.checkSetup();
-      setIsSetup(result.is_setup);
-    } catch (error) {
-      console.error('Error checking setup:', error);
+    // Retry logic to handle React 19 StrictMode double-mount fetch aborts
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await api.checkSetup();
+        setIsSetup(result.is_setup);
+        return;
+      } catch (error) {
+        lastError = error;
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
     }
+    console.error('Error checking setup after retries:', lastError);
   };
 
   const checkBiometricEnabled = async () => {
-    const enabled = await storage.getItem('biometric_enabled', 'false');
-    setIsBiometricEnabled(enabled === 'true');
+    try {
+      const enabled = await storage.getItem('biometric_enabled', 'false');
+      setIsBiometricEnabled(enabled === 'true');
+    } catch (error) {
+      console.error('Error checking biometric:', error);
+    }
   };
 
   const setupMasterPassword = async (password: string) => {
@@ -104,6 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         masterPassword,
         isAuthenticated,
         isSetup,
+        isCheckingSetup,
         isBiometricEnabled,
         login,
         logout,
