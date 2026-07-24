@@ -12,6 +12,8 @@ from passlib.context import CryptContext
 from cryptography.fernet import Fernet
 import base64
 import hashlib
+from bson import ObjectId
+from bson.errors import InvalidId
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -196,8 +198,10 @@ async def get_password_entry(entry_id: str, master_password: str):
     if not user or not pwd_context.verify(master_password, user["master_password"]):
         raise HTTPException(status_code=401, detail="Invalid master password")
     
-    from bson import ObjectId
-    entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
+    try:
+        entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid entry ID format")
     
     if not entry:
         raise HTTPException(status_code=404, detail="Password entry not found")
@@ -216,8 +220,10 @@ async def update_password_entry(entry_id: str, update: PasswordEntryUpdate):
     if not user or not pwd_context.verify(update.master_password, user["master_password"]):
         raise HTTPException(status_code=401, detail="Invalid master password")
     
-    from bson import ObjectId
-    entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
+    try:
+        entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid entry ID format")
     
     if not entry:
         raise HTTPException(status_code=404, detail="Password entry not found")
@@ -262,8 +268,10 @@ async def delete_password_entry(entry_id: str, master_password: str):
     if not user or not pwd_context.verify(master_password, user["master_password"]):
         raise HTTPException(status_code=401, detail="Invalid master password")
     
-    from bson import ObjectId
-    result = await db.password_entries.delete_one({"_id": ObjectId(entry_id)})
+    try:
+        result = await db.password_entries.delete_one({"_id": ObjectId(entry_id)})
+    except InvalidId:
+        raise HTTPException(status_code=400, detail="Invalid entry ID format")
     
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Password entry not found")
