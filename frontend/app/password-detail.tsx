@@ -108,7 +108,7 @@ export default function PasswordDetailScreen() {
               <Text style={styles.valueText}>
                 {showPassword ? entry.password : '••••••••'}
               </Text>
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
                 <Ionicons
                   name={showPassword ? 'eye-off' : 'eye'}
                   size={20}

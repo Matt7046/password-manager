@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
   RefreshControl,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { api, PasswordEntry } from '@/src/services/api';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,9 +30,12 @@ export default function HomeScreen() {
 
   const categories = ['Tutti', 'Social Media', 'Email', 'Banking', 'Shopping', 'Work', 'Entertainment', 'Gaming', 'Travel', 'Education', 'Health', 'Other'];
 
-  useEffect(() => {
-    loadPasswords();
-  }, []);
+  // Reload passwords every time this screen gets focus (after add/edit/delete)
+  useFocusEffect(
+    useCallback(() => {
+      loadPasswords();
+    }, [masterPassword])
+  );
 
   useEffect(() => {
     filterPasswords();

@@ -82,11 +82,10 @@ export default function AddPasswordScreen() {
         tags: tags,
         master_password: masterPassword,
       });
-      Alert.alert('Successo', 'Password salvata', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      // Redirect immediately without Alert callback (works reliably on web/mobile)
+      router.back();
     } catch (error: any) {
-      Alert.alert('Errore', error.message);
+      Alert.alert('Errore', error.message || 'Impossibile salvare la password');
     } finally {
       setLoading(false);
     }
@@ -148,7 +147,7 @@ export default function AddPasswordScreen() {
               onChangeText={setPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
               <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#666" />
             </TouchableOpacity>
           </View>

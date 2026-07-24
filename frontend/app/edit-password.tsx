@@ -115,11 +115,10 @@ export default function EditPasswordScreen() {
         tags: tags,
         master_password: masterPassword,
       });
-      Alert.alert('Successo', 'Password aggiornata', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      // Redirect immediately without Alert callback (works reliably on web/mobile)
+      router.back();
     } catch (error: any) {
-      Alert.alert('Errore', error.message);
+      Alert.alert('Errore', error.message || 'Impossibile aggiornare la password');
     } finally {
       setSaving(false);
     }
@@ -189,7 +188,7 @@ export default function EditPasswordScreen() {
               onChangeText={setPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
               <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#666" />
             </TouchableOpacity>
           </View>

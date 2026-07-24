@@ -69,7 +69,7 @@ export default function SetupScreen() {
               onChangeText={setPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
               <Ionicons
                 name={showPassword ? 'eye-off' : 'eye'}
                 size={20}
@@ -89,7 +89,7 @@ export default function SetupScreen() {
               onChangeText={setConfirmPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)}>
+            <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
               <Ionicons
                 name={showConfirm ? 'eye-off' : 'eye'}
                 size={20}
