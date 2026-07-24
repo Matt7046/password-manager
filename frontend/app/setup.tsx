@@ -35,6 +35,7 @@ export default function SetupScreen() {
 
     try {
       await setupMasterPassword(password);
+      // Redirect direttamente alla home (l'utente è già autenticato dopo il setup)
       router.replace('/home');
     } catch (error: any) {
       Alert.alert('Errore', error.message || 'Setup fallito');
