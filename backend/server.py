@@ -21,15 +21,44 @@ import resend
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
-mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+# MongoDB — same Atlas cluster as Activity Manager; dedicated DB_NAME (not MONGO_DB=demo)
+mongo_url = os.environ.get('MONGO_URL') or os.environ.get('MONGO_URI')
+if not mongo_url:
+    raise RuntimeError('Set MONGO_URL or MONGO_URI (reuse Activity Manager Mongo connection string)')
 
-# Resend setup
+db_name = os.environ.get('DB_NAME') or os.environ.get('MONGO_DB_PASSWORD') or 'password_manager'
+
+# X509 client certs (same files Activity Manager mounts under /app/certificate)
+mongo_cert = os.environ.get('MONGO_CERT_PATH', '/app/certificate/client.pem')
+mongo_key = os.environ.get('MONGO_KEY_PATH', '/app/certificate/client-key.pem')
+
+mongo_kwargs = {}
+if Path(mongo_cert).is_file() and Path(mongo_key).is_file():
+    # PyMongo wants cert+key in one PEM for tlsCertificateKeyFile
+    combined = Path('/tmp/mongo-client-combined.pem')
+    combined.write_text(
+        Path(mongo_cert).read_text(encoding='utf-8')
+        + '\n'
+        + Path(mongo_key).read_text(encoding='utf-8'),
+        encoding='utf-8',
+    )
+    mongo_kwargs['tls'] = True
+    mongo_kwargs['tlsCertificateKeyFile'] = str(combined)
+elif 'X509' in mongo_url.upper() or 'MONGODB-X509' in mongo_url.upper():
+    raise RuntimeError(
+        f'X509 URI detected but cert/key not found at {mongo_cert} / {mongo_key}. '
+        'Mount Activity Manager certificate folder into the container.'
+    )
+
+client = AsyncIOMotorClient(mongo_url, **mongo_kwargs)
+db = client[db_name]
+
+# Resend setup (optional — forgot-password needs a key; free tier is enough)
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
 SERVER_SECRET = os.environ.get('SERVER_SECRET', '')
+if not SERVER_SECRET:
+    logging.warning('SERVER_SECRET is empty — set a long random secret before production use')
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -59,7 +88,10 @@ def generate_otp() -> str:
     return ''.join(random.choices(string.digits, k=6))
 
 def send_otp_email(to_email: str, otp_code: str) -> bool:
-    """Send OTP code via Resend"""
+    """Send OTP code via Resend (skipped if RESEND_API_KEY is not configured)"""
+    if not resend.api_key:
+        logging.error('RESEND_API_KEY not set — cannot send OTP email')
+        return False
     try:
         html_content = f"""
         <html>
@@ -98,10 +130,15 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
         return False
 
 # Create the main app without a prefix
-app = FastAPI()
+# Behind nginx: https://activity-manager.colorsdev.tech/password-manager/ → this service
+app = FastAPI(title="Password Manager API")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+@api_router.get("/health")
+async def health():
+    return {"status": "ok", "db": db_name}
 
 # ============ Models ============
 

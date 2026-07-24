@@ -25,10 +25,7 @@ export default function ForgotPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const validateEmail = (email: string) => {
-    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
-  };
+  const validateEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   const handleSendOTP = async () => {
     if (!email.trim() || !validateEmail(email)) {
@@ -41,7 +38,7 @@ export default function ForgotPasswordScreen() {
       await api.forgotPassword(email.trim().toLowerCase());
       Alert.alert(
         'Codice Inviato',
-        `Un codice a 6 cifre è stato inviato a ${email}. Controlla la tua casella email (anche spam).`
+        `Un codice a 6 cifre è stato inviato a ${email}. Controlla anche lo spam.`,
       );
       setStep('otp');
     } catch (error: any) {
@@ -56,12 +53,10 @@ export default function ForgotPasswordScreen() {
       Alert.alert('Errore', 'Il codice deve essere di 6 cifre');
       return;
     }
-
     if (newPassword.length < 6) {
       Alert.alert('Errore', 'La password deve essere di almeno 6 caratteri');
       return;
     }
-
     if (newPassword !== confirmPassword) {
       Alert.alert('Errore', 'Le password non corrispondono');
       return;
@@ -72,7 +67,7 @@ export default function ForgotPasswordScreen() {
       await api.verifyOTPReset(email.trim().toLowerCase(), otpCode, newPassword);
       Alert.alert(
         'Password Resettata',
-        'Password resettata con successo. Ora puoi accedere con la nuova password.'
+        'Ora puoi accedere con la nuova password master.',
       );
       router.replace('/login');
     } catch (error: any) {
@@ -105,7 +100,7 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={styles.title}>Reset via Email</Text>
               <Text style={styles.subtitle}>
-                Inserisci l'email di registrazione per ricevere il codice di reset
+                Inserisci l&apos;email di registrazione per ricevere il codice di reset
               </Text>
 
               <View style={styles.inputContainer}>
@@ -143,7 +138,7 @@ export default function ForgotPasswordScreen() {
             <>
               <Text style={styles.title}>Inserisci Codice</Text>
               <Text style={styles.subtitle}>
-                Inserisci il codice a 6 cifre inviato a{'\n'}
+                Codice inviato a{'\n'}
                 <Text style={styles.emailText}>{email}</Text>
               </Text>
 
@@ -178,11 +173,7 @@ export default function ForgotPasswordScreen() {
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                   activeOpacity={0.6}
                 >
-                  <Ionicons
-                    name={showPassword ? 'eye-off' : 'eye'}
-                    size={20}
-                    color="#666"
-                  />
+                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#666" />
                 </TouchableOpacity>
               </View>
 
@@ -213,10 +204,7 @@ export default function ForgotPasswordScreen() {
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.resendButton}
-                onPress={() => setStep('email')}
-              >
+              <TouchableOpacity style={styles.resendButton} onPress={() => setStep('email')}>
                 <Text style={styles.resendText}>Cambia email / Invia di nuovo</Text>
               </TouchableOpacity>
             </>
@@ -228,10 +216,7 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1a1a2e',
-  },
+  container: { flex: 1, backgroundColor: '#1a1a2e' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -240,26 +225,11 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 16,
   },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
+  backButton: { padding: 8 },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  scrollContent: { flexGrow: 1 },
+  content: { flex: 1, justifyContent: 'center', padding: 24 },
+  iconContainer: { alignItems: 'center', marginBottom: 32 },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
@@ -274,10 +244,7 @@ const styles = StyleSheet.create({
     marginBottom: 32,
     lineHeight: 22,
   },
-  emailText: {
-    color: '#4ecdc4',
-    fontWeight: '600',
-  },
+  emailText: { color: '#4ecdc4', fontWeight: '600' },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -289,14 +256,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#0f3460',
   },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    color: '#fff',
-    fontSize: 16,
-  },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, color: '#fff', fontSize: 16 },
   otpInput: {
     flex: 1,
     color: '#4ecdc4',
@@ -312,14 +273,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonText: {
-    color: '#1a1a2e',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  buttonDisabled: { opacity: 0.5 },
+  buttonText: { color: '#1a1a2e', fontSize: 18, fontWeight: 'bold' },
   warning: {
     color: '#4ecdc4',
     textAlign: 'center',
@@ -327,14 +282,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
   },
-  resendButton: {
-    alignItems: 'center',
-    marginTop: 16,
-    padding: 12,
-  },
-  resendText: {
-    color: '#4ecdc4',
-    fontSize: 14,
-    textDecorationLine: 'underline',
-  },
+  resendButton: { alignItems: 'center', marginTop: 16, padding: 12 },
+  resendText: { color: '#4ecdc4', fontSize: 14, textDecorationLine: 'underline' },
 });

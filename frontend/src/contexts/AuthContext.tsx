@@ -41,7 +41,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const checkSetup = async () => {
-    // Retry logic to handle React 19 StrictMode double-mount fetch aborts
     let lastError: any = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
@@ -51,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       } catch (error) {
         lastError = error;
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
     }
     console.error('Error checking setup after retries:', lastError);

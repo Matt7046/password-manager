@@ -1,0 +1,68 @@
+# Password Manager — stack autonomo (niente modifiche ad Activity Manager).
+#
+# Stesso VPS di AM: le porte 80/443 sono già usate da AM → usiamo Cloudflare Tunnel.
+# Immagine API: docker.io/matt7046/password-manager:1.0.0
+
+services:
+  password-manager:
+    image: docker.io/matt7046/password-manager:1.0.0
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: password-manager
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DB_NAME: ${DB_NAME:-password_manager}
+      MONGO_CERT_PATH: /app/certificate/client.pem
+      MONGO_KEY_PATH: /app/certificate/client-key.pem
+    volumes:
+      # Certificati X509 locali (copia da AM, NON commitare su GitHub)
+      - ${MONGO_CERT_HOST_PATH:-./certificate}:/app/certificate:ro
+    expose:
+      - "8000"
+    networks:
+      app-network:
+        aliases:
+          - password-manager
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Reverse proxy dedicato (solo rete Docker, niente porte host)
+  password-manager-nginx:
+    image: nginx:latest
+    container_name: password-manager-nginx
+    restart: always
+    volumes:
+      - ./nginx/nginx.tunnel.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - password-manager
+    expose:
+      - "80"
+    networks:
+      app-network:
+        aliases:
+          - password-manager-nginx
+
+  # Espone https://password.colorsdev.tech senza toccare nginx di AM
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: password-manager-tunnel
+    restart: always
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - password-manager-nginx
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true
+    name: ${COMPOSE_NETWORK:-app-network}

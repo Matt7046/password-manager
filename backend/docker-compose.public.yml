@@ -1,0 +1,17 @@
+# Override: se un giorno hai un VPS con 80/443 libere (non condiviso con AM).
+# Uso: docker compose -f docker-compose.yml -f docker-compose.public.yml up -d
+#
+# Prima: certbot per password.colorsdev.tech, poi monta i cert in nginx.conf
+
+services:
+  password-manager-nginx:
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/lib/letsencrypt:/var/lib/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+
+  cloudflared:
+    profiles: ["never"]

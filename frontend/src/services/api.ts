@@ -1,4 +1,4 @@
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL + '/api';
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || '').replace(/\/$/, '') + '/api';
 
 export interface PasswordEntry {
   id: string;
@@ -13,8 +13,17 @@ export interface PasswordEntry {
   updated_at: string;
 }
 
+async function parseError(response: Response, fallback: string) {
+  try {
+    const error = await response.json();
+    throw new Error(error.detail || fallback);
+  } catch (e) {
+    if (e instanceof Error && e.message !== fallback) throw e;
+    throw new Error(fallback);
+  }
+}
+
 export const api = {
-  // Auth endpoints
   checkSetup: async () => {
     const response = await fetch(`${API_URL}/auth/check`);
     return response.json();
@@ -24,12 +33,9 @@ export const api = {
     const response = await fetch(`${API_URL}/auth/setup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, master_password: masterPassword })
+      body: JSON.stringify({ email, master_password: masterPassword }),
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Setup failed');
-    }
+    if (!response.ok) await parseError(response, 'Setup failed');
     return response.json();
   },
 
@@ -37,12 +43,9 @@ export const api = {
     const response = await fetch(`${API_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
+      body: JSON.stringify({ email }),
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to send OTP');
-    }
+    if (!response.ok) await parseError(response, 'Failed to send OTP');
     return response.json();
   },
 
@@ -53,13 +56,10 @@ export const api = {
       body: JSON.stringify({
         email,
         otp_code: otpCode,
-        new_master_password: newMasterPassword
-      })
+        new_master_password: newMasterPassword,
+      }),
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'OTP verification failed');
-    }
+    if (!response.ok) await parseError(response, 'OTP verification failed');
     return response.json();
   },
 
@@ -67,29 +67,24 @@ export const api = {
     const response = await fetch(`${API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, master_password: masterPassword })
+      body: JSON.stringify({ email, master_password: masterPassword }),
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Login failed');
-    }
+    if (!response.ok) await parseError(response, 'Login failed');
     return response.json();
   },
 
   resetAllData: async () => {
     const response = await fetch(`${API_URL}/auth/reset`, {
-      method: 'DELETE'
+      method: 'DELETE',
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Reset failed');
-    }
+    if (!response.ok) await parseError(response, 'Reset failed');
     return response.json();
   },
 
-  // Password entries endpoints
   getAllPasswords: async (masterPassword: string): Promise<PasswordEntry[]> => {
-    const response = await fetch(`${API_URL}/passwords?master_password=${encodeURIComponent(masterPassword)}`);
+    const response = await fetch(
+      `${API_URL}/passwords?master_password=${encodeURIComponent(masterPassword)}`,
+    );
     if (!response.ok) throw new Error('Failed to fetch passwords');
     return response.json();
   },
@@ -98,12 +93,9 @@ export const api = {
     const response = await fetch(`${API_URL}/passwords`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to create password');
-    }
+    if (!response.ok) await parseError(response, 'Failed to create password');
     return response.json();
   },
 
@@ -111,23 +103,18 @@ export const api = {
     const response = await fetch(`${API_URL}/passwords/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to update password');
-    }
+    if (!response.ok) await parseError(response, 'Failed to update password');
     return response.json();
   },
 
   deletePassword: async (id: string, masterPassword: string) => {
-    const response = await fetch(`${API_URL}/passwords/${id}?master_password=${encodeURIComponent(masterPassword)}`, {
-      method: 'DELETE'
-    });
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.detail || 'Failed to delete password');
-    }
+    const response = await fetch(
+      `${API_URL}/passwords/${id}?master_password=${encodeURIComponent(masterPassword)}`,
+      { method: 'DELETE' },
+    );
+    if (!response.ok) await parseError(response, 'Failed to delete password');
     return response.json();
   },
 
@@ -135,7 +122,7 @@ export const api = {
     const response = await fetch(`${API_URL}/passwords/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, master_password: masterPassword })
+      body: JSON.stringify({ query, master_password: masterPassword }),
     });
     if (!response.ok) throw new Error('Search failed');
     return response.json();
@@ -144,5 +131,5 @@ export const api = {
   getCategories: async () => {
     const response = await fetch(`${API_URL}/categories`);
     return response.json();
-  }
+  },
 };

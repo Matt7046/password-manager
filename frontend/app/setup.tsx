@@ -153,7 +153,7 @@ export default function SetupScreen() {
           </TouchableOpacity>
 
           <Text style={styles.warning}>
-            ⚠️ Ricorda la password! L'email servirà per il reset se la dimentichi.
+            ⚠️ Ricorda la password! L&apos;email servirà per il reset se la dimentichi.
           </Text>
         </View>
       </ScrollView>

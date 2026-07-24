@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Password Manager",
+    "slug": "password-manager",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "passwordmanager",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.passwordvault.de83y1",
+      "bundleIdentifier": "com.local.passwordmanager",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Accedi rapidamente alle password"
       }
@@ -21,7 +21,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.passwordvault.de83y1",
+      "package": "com.local.passwordmanager",
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"

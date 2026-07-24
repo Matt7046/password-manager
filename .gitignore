@@ -45,6 +45,10 @@ dump.rdb
 # System files
 .DS_Store
 *.pem
+backend/certificate/*
+!backend/certificate/README.md
+.env
+backend/.env
 
 # Python
 __pycache__/
