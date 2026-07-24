@@ -1,0 +1,42 @@
+{
+  "summary": "TWO NEW FEATURES VERIFIED (backend + frontend E2E). (A) Login now requires email + master_password combo — backend and frontend fully working. (B) Home screen biometric-toggle icon rendered with correct dual state — gray finger-print-outline when disabled, teal finger-print when enabled — testID='toggle-biometric-button' present and tappable. Backend pytest: 18 PASSED / 1 SKIPPED (Resend send in CI) / 0 FAILED — 100% pass on real assertions. Frontend Playwright on mobile viewport 375x667: (1) login screen renders login-email-input + master-password-input + login-button + forgot-password-button + create-account-button; (2) wrong password → backend 401 → user stays on login (console logged 401); (3) wrong email → backend 401 → user stays on login; (4) correct email+password → navigates to home; (5) home shows toggle-biometric-button with icon color rgb(102,102,102)=#666 (matches disabled/gray spec) and logout-button; (6) tapping toggle-biometric on web triggers enableBiometric() which correctly rejects because LocalAuthentication.hasHardwareAsync()=false on web preview; (7) logout returns user to login screen. NOTE: Native Alert.alert() text (Vuoi disabilitare l'accesso biometrico? / Annulla / Disabilita) could not be visually inspected because it is rendered via window.alert on web and because the toggle starts in DISABLED state — the confirmation Alert only fires when going ON→OFF, which requires biometric hardware. Code review of home.tsx L121-149 and AuthContext.tsx L131-136 confirms handleDisableBiometric shows Alert with Italian copy 'Vuoi disabilitare l'accesso biometrico?' Annulla/Disabilita buttons, and disableBiometric() clears secure storage + sets isBiometricEnabled=false.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/iteration_9.json"
+  ],
+  "action_items": [
+    "Main agent: Perform one manual QA on real device (Expo Go / native build) to visually confirm the disable-biometric Alert (Vuoi disabilitare l'accesso biometrico? Annulla / Disabilita) — this path requires biometric hardware and cannot be automated in web preview.",
+    "Optional nit: api.ts uses process.env.EXPO_PUBLIC_BACKEND_URL directly at module load — if the env is ever missing it silently becomes 'undefined/api'. Consider a fail-fast check."
+  ],
+  "critical_code_review_comments": [
+    "server.py L193-197: correct — email compared case-insensitively (both sides .lower()), same generic error message 'Email o password non validi' for both wrong-email and wrong-password (good security practice — no user enumeration).",
+    "AuthContext.tsx L81-90 login(email, password): stores email in userEmail state and password in masterPassword — used later by enableBiometric to persist both to secure storage. Correct.",
+    "home.tsx L143-149 handleToggleBiometric: correctly branches on isBiometricEnabled — ON→disable (confirmation Alert), OFF→enableBiometric directly. Matches spec.",
+    "home.tsx L230-234: icon name and color correctly toggle: 'finger-print' teal #4ecdc4 when enabled, 'finger-print-outline' gray #666 when disabled. Verified in DOM (rgb(102,102,102)).",
+    "login.tsx L62: email is lowercased and trimmed before send — good. Backend also lowercases — double safety.",
+    "login.tsx L23-38: on mount, if isBiometricEnabled AND hardware present, automatically triggers biometric prompt. Fine but could feel jarring on re-auth after email change; not a blocker."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_new_features.py (updated login tests to send email+master_password; added 5 new tests for wrong-email 401, missing-email 422, invalid-email-format 422, case-insensitive email login, generic error message)"
+  ],
+  "success_rate": {
+    "backend": "18/18 = 100% (1 skipped due to Resend unavailability in CI, not a failure)",
+    "frontend": "7/7 web-exercisable checks passed (login render, wrong-password, wrong-email, correct-login, home render, toggle-tap, logout)"
+  },
+  "seed_data_creation": "Reset DB and created test user email=test@example.com master_password=TestPass123 via /api/auth/reset then /api/auth/setup. Left in DB after run for main agent verification.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend endpoint POST /api/auth/login now takes {email, master_password}; returns 200 on match, 401 'Email o password non validi' on either wrong. Email compared case-insensitively. Frontend testIDs on login: login-email-input, master-password-input, login-button, forgot-password-button, create-account-button, biometric-login-button (only rendered on real hardware). Home testIDs: toggle-biometric-button, logout-button. Biometric confirmation Alert (Vuoi disabilitare l'accesso biometrico?) only appears when going ON→OFF and cannot be triggered on web preview because LocalAuthentication has no hardware there. All backend tests in /app/backend/tests/test_new_features.py; run with `pytest -n 0` to avoid xdist load-scope ordering issues (parallel workers share MongoDB and clean_db can race).",
+  "rca_of_issue": "N/A — this iteration verifies new features (not a bug fix). Both features work as specified end-to-end at API and UI level."
+}

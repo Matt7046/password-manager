@@ -81,16 +81,42 @@ class TestSetupWithEmail:
                                   "master_password": OLD_PASSWORD})
         assert r.status_code == 400
 
-    def test_06_login_with_correct_password(self, api_client, base_url):
+    def test_06_login_with_correct_email_and_password(self, api_client, base_url):
         r = api_client.post(f"{base_url}/api/auth/login",
-                            json={"master_password": OLD_PASSWORD})
+                            json={"email": TEST_EMAIL, "master_password": OLD_PASSWORD})
         assert r.status_code == 200
         assert r.json()["success"] is True
 
     def test_07_login_wrong_password(self, api_client, base_url):
         r = api_client.post(f"{base_url}/api/auth/login",
-                            json={"master_password": "wrong"})
+                            json={"email": TEST_EMAIL, "master_password": "wrong"})
         assert r.status_code == 401
+        assert "Email o password non validi" in r.json()["detail"]
+
+    def test_08_login_wrong_email(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/login",
+                            json={"email": "someoneelse@example.com",
+                                  "master_password": OLD_PASSWORD})
+        assert r.status_code == 401
+        assert "Email o password non validi" in r.json()["detail"]
+
+    def test_09_login_missing_email_422(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/login",
+                            json={"master_password": OLD_PASSWORD})
+        assert r.status_code == 422
+
+    def test_10_login_invalid_email_format_422(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/login",
+                            json={"email": "not-an-email",
+                                  "master_password": OLD_PASSWORD})
+        assert r.status_code == 422
+
+    def test_11_login_email_case_insensitive(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/login",
+                            json={"email": TEST_EMAIL.upper(),
+                                  "master_password": OLD_PASSWORD})
+        assert r.status_code == 200
+        assert r.json()["success"] is True
 
 
 # ---------- 4. Forgot-password ----------
@@ -249,13 +275,15 @@ class TestResetPreservesEntries:
 
         # ---- 7. Old password rejected ----
         r = api_client.post(
-            f"{base_url}/api/auth/login", json={"master_password": OLD_PASSWORD}
+            f"{base_url}/api/auth/login",
+            json={"email": TEST_EMAIL, "master_password": OLD_PASSWORD},
         )
         assert r.status_code == 401, "old password should not work"
 
         # ---- 8. New password accepted ----
         r = api_client.post(
-            f"{base_url}/api/auth/login", json={"master_password": NEW_PASSWORD}
+            f"{base_url}/api/auth/login",
+            json={"email": TEST_EMAIL, "master_password": NEW_PASSWORD},
         )
         assert r.status_code == 200 and r.json()["success"] is True
 

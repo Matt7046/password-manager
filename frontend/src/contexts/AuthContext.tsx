@@ -15,6 +15,7 @@ interface AuthContextType {
   setupMasterPassword: (email: string, password: string) => Promise<void>;
   checkSetup: () => Promise<void>;
   enableBiometric: () => Promise<void>;
+  disableBiometric: () => Promise<void>;
   authenticateWithBiometric: () => Promise<void>;
   resetAllData: () => Promise<void>;
 }
@@ -127,6 +128,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const disableBiometric = async () => {
+    await storage.secureSet('master_password', '');
+    await storage.secureSet('user_email', '');
+    await storage.setItem('biometric_enabled', 'false');
+    setIsBiometricEnabled(false);
+  };
+
   const authenticateWithBiometric = async () => {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Authenticate to access your passwords',
@@ -171,6 +179,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setupMasterPassword,
         checkSetup,
         enableBiometric,
+        disableBiometric,
         authenticateWithBiometric,
         resetAllData
       }}

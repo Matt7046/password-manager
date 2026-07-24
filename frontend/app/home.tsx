@@ -25,7 +25,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tutti');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const { masterPassword, logout, isBiometricEnabled, enableBiometric } = useAuth();
+  const { masterPassword, logout, isBiometricEnabled, enableBiometric, disableBiometric } = useAuth();
   const router = useRouter();
 
   const categories = ['Tutti', 'Social Media', 'Email', 'Banca', 'Acquisti', 'Lavoro', 'Intrattenimento', 'Videogiochi', 'Viaggi', 'Istruzione', 'Salute', 'Altro'];
@@ -118,6 +118,36 @@ export default function HomeScreen() {
     }
   };
 
+  const handleDisableBiometric = async () => {
+    Alert.alert(
+      'Disabilita Biometrica',
+      'Vuoi disabilitare l\'accesso biometrico? Potrai riabilitarlo dopo il prossimo login.',
+      [
+        { text: 'Annulla', style: 'cancel' },
+        {
+          text: 'Disabilita',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await disableBiometric();
+              Alert.alert('Successo', 'Autenticazione biometrica disabilitata');
+            } catch (error: any) {
+              Alert.alert('Errore', error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleToggleBiometric = () => {
+    if (isBiometricEnabled) {
+      handleDisableBiometric();
+    } else {
+      handleEnableBiometric();
+    }
+  };
+
   const getCategoryIcon = (category: string) => {
     const icons: { [key: string]: any } = {
       'Social Media': 'share-social',
@@ -192,15 +222,19 @@ export default function HomeScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Password Manager</Text>
         <View style={styles.headerActions}>
-          {!isBiometricEnabled && (
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={handleEnableBiometric}
-            >
-              <Ionicons name="finger-print" size={24} color="#4ecdc4" />
-            </TouchableOpacity>
-          )}
           <TouchableOpacity
+            testID="toggle-biometric-button"
+            style={styles.headerButton}
+            onPress={handleToggleBiometric}
+          >
+            <Ionicons
+              name={isBiometricEnabled ? 'finger-print' : 'finger-print-outline'}
+              size={24}
+              color={isBiometricEnabled ? '#4ecdc4' : '#666'}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            testID="logout-button"
             style={styles.headerButton}
             onPress={() => {
               logout();
