@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.local.passwordmanager",
+      "bundleIdentifier": "com.colorsdev.passwordmanager",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Accedi rapidamente alle password"
       }
@@ -21,7 +21,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.local.passwordmanager",
+      "package": "com.colorsdev.passwordmanager",
+      "versionCode": 1,
       "permissions": [
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"
@@ -34,6 +35,13 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Accedi rapidamente alle password"
+        }
+      ],
       [
         "expo-splash-screen",
         {

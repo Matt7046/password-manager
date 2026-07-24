@@ -19,7 +19,7 @@ export default function PasswordDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const { id } = useLocalSearchParams();
-  const { masterPassword } = useAuth();
+  const { masterPassword, userEmail } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function PasswordDetailScreen() {
 
   const loadPassword = async () => {
     try {
-      const passwords = await api.getAllPasswords(masterPassword!);
+      const passwords = await api.getAllPasswords(userEmail, masterPassword!);
       const found = passwords.find(p => p.id === id);
       if (found) {
         setEntry(found);

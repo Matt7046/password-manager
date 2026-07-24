@@ -8,13 +8,13 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { api } from '@/src/services/api';
 import { Ionicons } from '@expo/vector-icons';
+import { showAlert } from '@/src/utils/alert';
 
 export default function AddPasswordScreen() {
   const [accountName, setAccountName] = useState('');
@@ -28,8 +28,15 @@ export default function AddPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { masterPassword } = useAuth();
+  const [errorText, setErrorText] = useState('');
+  const { masterPassword, userEmail, isAuthenticated } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated || !masterPassword) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, masterPassword]);
 
   const categories = [
     'Social Media',
@@ -57,35 +64,46 @@ export default function AddPasswordScreen() {
   };
 
   const handleSave = async () => {
+    setErrorText('');
+    if (!masterPassword || !userEmail) {
+      showAlert('Errore', 'Sessione scaduta. Accedi di nuovo.');
+      router.replace('/login');
+      return;
+    }
     if (!accountName.trim()) {
-      Alert.alert('Errore', 'Inserisci il nome dell\'account');
+      setErrorText('Inserisci il nome dell\'account');
+      showAlert('Errore', 'Inserisci il nome dell\'account');
       return;
     }
     if (!username.trim()) {
-      Alert.alert('Errore', 'Inserisci username o email');
+      setErrorText('Inserisci username o email');
+      showAlert('Errore', 'Inserisci username o email');
       return;
     }
     if (!password.trim()) {
-      Alert.alert('Errore', 'Inserisci la password');
+      setErrorText('Inserisci la password');
+      showAlert('Errore', 'Inserisci la password');
       return;
     }
 
     setLoading(true);
     try {
       await api.createPassword({
-        account_name: accountName,
-        username: username,
+        account_name: accountName.trim(),
+        username: username.trim(),
         password: password,
-        url: url,
+        url: url.trim(),
         notes: notes,
-        category: category,
-        tags: tags,
+        category: category || 'Altro',
+        tags: tags || [],
+        email: userEmail.trim().toLowerCase(),
         master_password: masterPassword,
       });
-      // Redirect immediately without Alert callback (works reliably on web/mobile)
-      router.back();
+      router.replace('/home');
     } catch (error: any) {
-      Alert.alert('Errore', error.message || 'Impossibile salvare la password');
+      const msg = error.message || 'Impossibile salvare la password';
+      setErrorText(msg);
+      showAlert('Errore', msg);
     } finally {
       setLoading(false);
     }
@@ -235,6 +253,7 @@ export default function AddPasswordScreen() {
             {loading ? 'Salvataggio...' : 'Salva Password'}
           </Text>
         </TouchableOpacity>
+        {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
       </ScrollView>
 
       {/* Category Modal */}
@@ -398,6 +417,12 @@ const styles = StyleSheet.create({
     color: '#1a1a2e',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  errorText: {
+    color: '#ff6b6b',
+    textAlign: 'center',
+    marginTop: 12,
+    fontSize: 14,
   },
   modalOverlay: {
     flex: 1,

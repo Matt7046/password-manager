@@ -16,7 +16,22 @@ export interface PasswordEntry {
 async function parseError(response: Response, fallback: string) {
   try {
     const error = await response.json();
-    throw new Error(error.detail || fallback);
+    const detail = error?.detail;
+    if (typeof detail === 'string') {
+      throw new Error(detail);
+    }
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (typeof first === 'string') {
+        throw new Error(first);
+      }
+      const field = Array.isArray(first?.loc)
+        ? first.loc.filter((x: unknown) => x !== 'body').join('.')
+        : '';
+      const msg = first?.msg || first?.message || JSON.stringify(first);
+      throw new Error(field ? `${field}: ${msg}` : msg || fallback);
+    }
+    throw new Error(fallback);
   } catch (e) {
     if (e instanceof Error && e.message !== fallback) throw e;
     throw new Error(fallback);
@@ -24,8 +39,9 @@ async function parseError(response: Response, fallback: string) {
 }
 
 export const api = {
-  checkSetup: async () => {
-    const response = await fetch(`${API_URL}/auth/check`);
+  checkSetup: async (email?: string) => {
+    const qs = email ? `?email=${encodeURIComponent(email)}` : '';
+    const response = await fetch(`${API_URL}/auth/check${qs}`);
     return response.json();
   },
 
@@ -81,9 +97,9 @@ export const api = {
     return response.json();
   },
 
-  getAllPasswords: async (masterPassword: string): Promise<PasswordEntry[]> => {
+  getAllPasswords: async (email: string, masterPassword: string): Promise<PasswordEntry[]> => {
     const response = await fetch(
-      `${API_URL}/passwords?master_password=${encodeURIComponent(masterPassword)}`,
+      `${API_URL}/passwords?email=${encodeURIComponent(email)}&master_password=${encodeURIComponent(masterPassword)}`,
     );
     if (!response.ok) throw new Error('Failed to fetch passwords');
     return response.json();
@@ -109,20 +125,24 @@ export const api = {
     return response.json();
   },
 
-  deletePassword: async (id: string, masterPassword: string) => {
+  deletePassword: async (id: string, email: string, masterPassword: string) => {
     const response = await fetch(
-      `${API_URL}/passwords/${id}?master_password=${encodeURIComponent(masterPassword)}`,
+      `${API_URL}/passwords/${id}?email=${encodeURIComponent(email)}&master_password=${encodeURIComponent(masterPassword)}`,
       { method: 'DELETE' },
     );
     if (!response.ok) await parseError(response, 'Failed to delete password');
     return response.json();
   },
 
-  searchPasswords: async (query: string, masterPassword: string): Promise<PasswordEntry[]> => {
+  searchPasswords: async (
+    query: string,
+    email: string,
+    masterPassword: string,
+  ): Promise<PasswordEntry[]> => {
     const response = await fetch(`${API_URL}/passwords/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, master_password: masterPassword }),
+      body: JSON.stringify({ query, email, master_password: masterPassword }),
     });
     if (!response.ok) throw new Error('Search failed');
     return response.json();

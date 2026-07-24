@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInput,
-  Alert,
   ActivityIndicator,
   RefreshControl,
   Modal,
@@ -16,6 +15,7 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { api, PasswordEntry } from '@/src/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import { showAlert, showConfirm } from '@/src/utils/alert';
 
 export default function HomeScreen() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
@@ -25,7 +25,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tutti');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const { masterPassword, logout, isBiometricEnabled, enableBiometric, disableBiometric } = useAuth();
+  const { masterPassword, userEmail, logout, isBiometricEnabled, enableBiometric, disableBiometric } = useAuth();
   const router = useRouter();
 
   const categories = ['Tutti', 'Social Media', 'Email', 'Banca', 'Acquisti', 'Lavoro', 'Intrattenimento', 'Videogiochi', 'Viaggi', 'Istruzione', 'Salute', 'Altro'];
@@ -33,10 +33,10 @@ export default function HomeScreen() {
   // Reload passwords every time this screen gets focus (after add/edit/delete)
   useFocusEffect(
     useCallback(() => {
-      if (masterPassword) {
+      if (masterPassword && userEmail) {
         loadPasswords();
       }
-    }, [masterPassword])
+    }, [masterPassword, userEmail])
   );
 
   useEffect(() => {
@@ -44,19 +44,17 @@ export default function HomeScreen() {
   }, [passwords, searchQuery, selectedCategory]);
 
   const loadPasswords = async () => {
-    if (!masterPassword) {
+    if (!masterPassword || !userEmail) {
       setLoading(false);
       setRefreshing(false);
       return;
     }
     try {
-      const data = await api.getAllPasswords(masterPassword);
+      const data = await api.getAllPasswords(userEmail, masterPassword);
       setPasswords(data);
     } catch (error) {
-      // Silently ignore errors when user has logged out or master password is invalid
-      // (e.g. after logout, focus effect triggers before navigation completes)
       if (masterPassword) {
-        Alert.alert('Errore', 'Impossibile caricare le password');
+        showAlert('Errore', 'Impossibile caricare le password');
       }
     } finally {
       setLoading(false);
@@ -83,60 +81,54 @@ export default function HomeScreen() {
 
   const handleCopyPassword = async (password: string, accountName: string) => {
     await Clipboard.setStringAsync(password);
-    Alert.alert('Copiato', `Password di ${accountName} copiata negli appunti`);
+    showAlert('Copiato', `Password di ${accountName} copiata negli appunti`);
   };
 
-  const handleDeletePassword = async (id: string, accountName: string) => {
-    Alert.alert(
+  const handleDeletePassword = (id: string, accountName: string) => {
+    if (!userEmail || !masterPassword) {
+      showAlert('Errore', 'Sessione scaduta. Accedi di nuovo.');
+      router.replace('/login');
+      return;
+    }
+
+    showConfirm(
       'Conferma',
       `Vuoi eliminare la password per ${accountName}?`,
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deletePassword(id, masterPassword!);
-              await loadPasswords();
-              Alert.alert('Successo', 'Password eliminata');
-            } catch (error: any) {
-              Alert.alert('Errore', error.message);
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await api.deletePassword(id, userEmail, masterPassword);
+          await loadPasswords();
+          showAlert('Successo', 'Password eliminata');
+        } catch (error: any) {
+          showAlert('Errore', error.message || 'Impossibile eliminare la password');
+        }
+      },
+      'Elimina',
     );
   };
 
   const handleEnableBiometric = async () => {
     try {
       await enableBiometric();
-      Alert.alert('Successo', 'Autenticazione biometrica abilitata');
+      showAlert('Successo', 'Autenticazione biometrica abilitata');
     } catch (error: any) {
-      Alert.alert('Errore', error.message);
+      showAlert('Errore', error.message);
     }
   };
 
-  const handleDisableBiometric = async () => {
-    Alert.alert(
+  const handleDisableBiometric = () => {
+    showConfirm(
       'Disabilita Biometrica',
       'Vuoi disabilitare l\'accesso biometrico? Potrai riabilitarlo dopo il prossimo login.',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Disabilita',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await disableBiometric();
-              Alert.alert('Successo', 'Autenticazione biometrica disabilitata');
-            } catch (error: any) {
-              Alert.alert('Errore', error.message);
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          await disableBiometric();
+          showAlert('Successo', 'Autenticazione biometrica disabilitata');
+        } catch (error: any) {
+          showAlert('Errore', error.message);
+        }
+      },
+      'Disabilita',
     );
   };
 

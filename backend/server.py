@@ -172,6 +172,7 @@ class PasswordEntryCreate(BaseModel):
     category: str
     tags: List[str] = []
     master_password: str
+    email: EmailStr
 
 class PasswordEntryUpdate(BaseModel):
     account_name: Optional[str] = None
@@ -182,6 +183,7 @@ class PasswordEntryUpdate(BaseModel):
     category: Optional[str] = None
     tags: Optional[List[str]] = None
     master_password: str
+    email: EmailStr
 
 class PasswordEntryResponse(BaseModel):
     id: str
@@ -198,136 +200,154 @@ class PasswordEntryResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     master_password: str
+    email: EmailStr
+
+
+async def migrate_legacy_users():
+    """Migrate single master_user + unscoped entries to per-email ownership."""
+    legacy = await db.users.find_one({"user_id": "master_user"})
+    if legacy and legacy.get("email"):
+        email = legacy["email"].lower()
+        await db.users.update_one(
+            {"_id": legacy["_id"]},
+            {"$set": {"user_id": email, "email": email}},
+        )
+        await db.password_entries.update_many(
+            {"owner_email": {"$exists": False}},
+            {"$set": {"owner_email": email}},
+        )
+
+
+async def get_user_by_email(email: str):
+    await migrate_legacy_users()
+    return await db.users.find_one({"email": email.lower()})
+
+
+async def authenticate_user(email: str, master_password: str):
+    user = await get_user_by_email(email)
+    if not user or not pwd_context.verify(master_password, user["master_password"]):
+        raise HTTPException(status_code=401, detail="Email o password non validi")
+    return user
+
 
 # ============ Auth Routes ============
 
 @api_router.post("/auth/setup", response_model=UserResponse)
 async def setup_master_password(user: UserCreate):
-    """Setup master password (first time) with email"""
-    existing_user = await db.users.find_one()
+    """Create a new vault account for this email (multi-user)."""
+    await migrate_legacy_users()
+    email = user.email.lower()
+    existing_user = await db.users.find_one({"email": email})
     if existing_user:
-        raise HTTPException(status_code=400, detail="Master password already set up")
-    
+        raise HTTPException(status_code=400, detail="Questa email è già registrata. Accedi invece.")
+
     hashed_password = pwd_context.hash(user.master_password)
     user_doc = {
-        "user_id": "master_user",
-        "email": user.email,
+        "user_id": email,
+        "email": email,
         "master_password": hashed_password,
-        "created_at": datetime.utcnow()
+        "created_at": datetime.utcnow(),
     }
-    
+
     await db.users.insert_one(user_doc)
-    return UserResponse(user_id="master_user", email=user.email, created_at=user_doc["created_at"])
+    return UserResponse(user_id=email, email=email, created_at=user_doc["created_at"])
+
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
     """Verify email + master password"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user:
-        raise HTTPException(status_code=404, detail="Nessun account registrato")
-    
-    # Verify email matches registered account
-    if user.get("email", "").lower() != credentials.email.lower():
-        raise HTTPException(status_code=401, detail="Email o password non validi")
-    
-    if not pwd_context.verify(credentials.master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Email o password non validi")
-    
+    await authenticate_user(credentials.email, credentials.master_password)
     return {"success": True, "message": "Login successful"}
 
+
 @api_router.get("/auth/check")
-async def check_setup():
-    """Check if master password is already set up"""
+async def check_setup(email: Optional[str] = None):
+    """Check if any account exists, or if a specific email is registered."""
+    await migrate_legacy_users()
+    if email:
+        user = await db.users.find_one({"email": email.lower()})
+        return {"is_setup": user is not None, "email": email.lower() if user else ""}
     user = await db.users.find_one()
     return {"is_setup": user is not None, "email": user.get("email", "") if user else ""}
+
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(request: ForgotPasswordRequest):
     """Send OTP to registered email for password reset"""
-    user = await db.users.find_one({"user_id": "master_user"})
+    user = await get_user_by_email(request.email)
     if not user:
-        raise HTTPException(status_code=404, detail="Nessun account registrato")
-    
-    if user.get("email", "").lower() != request.email.lower():
-        raise HTTPException(status_code=404, detail="Email non corrisponde all'account registrato")
-    
-    # Generate OTP
+        raise HTTPException(status_code=404, detail="Nessun account con questa email")
+
     otp_code = generate_otp()
     expires_at = datetime.utcnow() + timedelta(minutes=10)
-    
-    # Send email FIRST - only save OTP if email was sent successfully
+
     email_sent = send_otp_email(request.email, otp_code)
     if not email_sent:
         raise HTTPException(
             status_code=500,
-            detail="Impossibile inviare email. Verifica che l'indirizzo sia corretto o riprova più tardi."
+            detail="Impossibile inviare email. Verifica che l'indirizzo sia corretto o riprova più tardi.",
         )
-    
-    # Remove old OTPs for this email
+
     await db.otp_codes.delete_many({"email": request.email.lower()})
-    
-    # Save new OTP
     await db.otp_codes.insert_one({
         "email": request.email.lower(),
         "otp_code": otp_code,
         "created_at": datetime.utcnow(),
-        "expires_at": expires_at
+        "expires_at": expires_at,
     })
-    
+
     return {"success": True, "message": "Codice inviato via email"}
+
 
 @api_router.post("/auth/verify-otp-reset")
 async def verify_otp_reset(request: VerifyOTPResetRequest):
-    """Verify OTP code and reset master password.
-    Password entries are PRESERVED because they're encrypted with email-derived key."""
-    # Find OTP
+    """Verify OTP and reset master password for that email; entries preserved."""
     otp_record = await db.otp_codes.find_one({
         "email": request.email.lower(),
-        "otp_code": request.otp_code
+        "otp_code": request.otp_code,
     })
-    
+
     if not otp_record:
         raise HTTPException(status_code=400, detail="Codice non valido")
-    
+
     if datetime.utcnow() > otp_record["expires_at"]:
         await db.otp_codes.delete_one({"_id": otp_record["_id"]})
         raise HTTPException(status_code=400, detail="Codice scaduto")
-    
-    # Update ONLY the master password (keep entries intact)
+
     hashed_password = pwd_context.hash(request.new_master_password)
     result = await db.users.update_one(
-        {"user_id": "master_user", "email": request.email.lower()},
-        {"$set": {"master_password": hashed_password}}
+        {"email": request.email.lower()},
+        {"$set": {"master_password": hashed_password}},
     )
-    
+
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Utente non trovato")
-    
-    # Clean up the used OTP
+
     await db.otp_codes.delete_many({"email": request.email.lower()})
-    
     return {"success": True, "message": "Password resettata con successo. Le password salvate sono state preservate."}
+
 
 @api_router.delete("/auth/reset")
 async def reset_all_data():
-    """Legacy reset endpoint - kept for backward compatibility"""
+    """Dangerous: wipe ALL users and entries."""
     await db.users.delete_many({})
     await db.password_entries.delete_many({})
     await db.otp_codes.delete_many({})
     return {"success": True, "message": "All data has been reset"}
 
+
 # ============ Password Entry Routes ============
 
 @api_router.post("/passwords", response_model=PasswordEntryResponse)
 async def create_password_entry(entry: PasswordEntryCreate):
-    """Create a new password entry"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user or not pwd_context.verify(entry.master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
-    
-    encrypted_password = encrypt_password(entry.password, user["email"])
-    
+    """Create a new password entry for the authenticated user"""
+    user = await authenticate_user(entry.email, entry.master_password)
+    email = user["email"].lower()
+
+    encrypted_password = encrypt_password(entry.password, email)
+
     entry_doc = {
+        "owner_email": email,
         "account_name": entry.account_name,
         "username": entry.username,
         "password": encrypted_password,
@@ -336,80 +356,80 @@ async def create_password_entry(entry: PasswordEntryCreate):
         "category": entry.category,
         "tags": entry.tags,
         "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow()
+        "updated_at": datetime.utcnow(),
     }
-    
+
     result = await db.password_entries.insert_one(entry_doc)
     entry_doc["id"] = str(result.inserted_id)
     entry_doc["password"] = entry.password
-    
+
     return PasswordEntryResponse(**entry_doc)
 
+
 @api_router.get("/passwords", response_model=List[PasswordEntryResponse])
-async def get_all_passwords(master_password: str):
-    """Get all password entries"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user or not pwd_context.verify(master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
-    
-    entries = await db.password_entries.find().to_list(1000)
+async def get_all_passwords(master_password: str, email: EmailStr):
+    """Get all password entries for this user"""
+    user = await authenticate_user(email, master_password)
+    owner = user["email"].lower()
+
+    entries = await db.password_entries.find({"owner_email": owner}).to_list(1000)
     result = []
-    
+
     for entry in entries:
         try:
-            decrypted_password = decrypt_password(entry["password"], user["email"])
+            decrypted_password = decrypt_password(entry["password"], owner)
             entry["id"] = str(entry["_id"])
             entry["password"] = decrypted_password
             result.append(PasswordEntryResponse(**entry))
         except Exception as e:
             logging.error(f"Error decrypting password: {e}")
             continue
-    
+
     return result
 
+
 @api_router.get("/passwords/{entry_id}", response_model=PasswordEntryResponse)
-async def get_password_entry(entry_id: str, master_password: str):
+async def get_password_entry(entry_id: str, master_password: str, email: EmailStr):
     """Get a specific password entry"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user or not pwd_context.verify(master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
-    
+    user = await authenticate_user(email, master_password)
+    owner = user["email"].lower()
+
     try:
-        entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
+        entry = await db.password_entries.find_one({"_id": ObjectId(entry_id), "owner_email": owner})
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid entry ID format")
-    
+
     if not entry:
         raise HTTPException(status_code=404, detail="Password entry not found")
-    
-    decrypted_password = decrypt_password(entry["password"], user["email"])
+
+    decrypted_password = decrypt_password(entry["password"], owner)
     entry["id"] = str(entry["_id"])
     entry["password"] = decrypted_password
-    
+
     return PasswordEntryResponse(**entry)
+
 
 @api_router.put("/passwords/{entry_id}", response_model=PasswordEntryResponse)
 async def update_password_entry(entry_id: str, update: PasswordEntryUpdate):
     """Update a password entry"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user or not pwd_context.verify(update.master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
-    
+    user = await authenticate_user(update.email, update.master_password)
+    owner = user["email"].lower()
+
     try:
-        entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
+        entry = await db.password_entries.find_one({"_id": ObjectId(entry_id), "owner_email": owner})
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid entry ID format")
-    
+
     if not entry:
         raise HTTPException(status_code=404, detail="Password entry not found")
-    
+
     update_doc = {}
     if update.account_name is not None:
         update_doc["account_name"] = update.account_name
     if update.username is not None:
         update_doc["username"] = update.username
     if update.password is not None:
-        update_doc["password"] = encrypt_password(update.password, user["email"])
+        update_doc["password"] = encrypt_password(update.password, owner)
     if update.url is not None:
         update_doc["url"] = update.url
     if update.notes is not None:
@@ -418,61 +438,63 @@ async def update_password_entry(entry_id: str, update: PasswordEntryUpdate):
         update_doc["category"] = update.category
     if update.tags is not None:
         update_doc["tags"] = update.tags
-    
+
     update_doc["updated_at"] = datetime.utcnow()
-    
+
     await db.password_entries.update_one(
-        {"_id": ObjectId(entry_id)},
-        {"$set": update_doc}
+        {"_id": ObjectId(entry_id), "owner_email": owner},
+        {"$set": update_doc},
     )
-    
+
     updated_entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
-    decrypted_password = decrypt_password(updated_entry["password"], user["email"])
+    decrypted_password = decrypt_password(updated_entry["password"], owner)
     updated_entry["id"] = str(updated_entry["_id"])
     updated_entry["password"] = decrypted_password
-    
+
     return PasswordEntryResponse(**updated_entry)
 
+
 @api_router.delete("/passwords/{entry_id}")
-async def delete_password_entry(entry_id: str, master_password: str):
+async def delete_password_entry(entry_id: str, master_password: str, email: EmailStr):
     """Delete a password entry"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user or not pwd_context.verify(master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
-    
+    user = await authenticate_user(email, master_password)
+    owner = user["email"].lower()
+
     try:
-        result = await db.password_entries.delete_one({"_id": ObjectId(entry_id)})
+        result = await db.password_entries.delete_one({"_id": ObjectId(entry_id), "owner_email": owner})
     except InvalidId:
         raise HTTPException(status_code=400, detail="Invalid entry ID format")
-    
+
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Password entry not found")
-    
+
     return {"success": True, "message": "Password entry deleted"}
+
 
 @api_router.post("/passwords/search", response_model=List[PasswordEntryResponse])
 async def search_passwords(search: SearchRequest):
-    """Search password entries by account name"""
-    user = await db.users.find_one({"user_id": "master_user"})
-    if not user or not pwd_context.verify(search.master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
-    
+    """Search password entries by account name for this user"""
+    user = await authenticate_user(search.email, search.master_password)
+    owner = user["email"].lower()
+
     entries = await db.password_entries.find({
-        "account_name": {"$regex": search.query, "$options": "i"}
+        "owner_email": owner,
+        "account_name": {"$regex": search.query, "$options": "i"},
     }).to_list(1000)
-    
+
     result = []
     for entry in entries:
         try:
-            decrypted_password = decrypt_password(entry["password"], user["email"])
+            decrypted_password = decrypt_password(entry["password"], owner)
             entry["id"] = str(entry["_id"])
             entry["password"] = decrypted_password
             result.append(PasswordEntryResponse(**entry))
         except Exception as e:
             logging.error(f"Error decrypting password: {e}")
             continue
-    
+
     return result
+
 
 @api_router.get("/categories")
 async def get_categories():
@@ -488,7 +510,7 @@ async def get_categories():
         "Viaggi",
         "Istruzione",
         "Salute",
-        "Altro"
+        "Altro",
     ]
     return {"categories": categories}
 

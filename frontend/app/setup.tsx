@@ -7,12 +7,12 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { showAlert } from '@/src/utils/alert';
 
 export default function SetupScreen() {
   const [email, setEmail] = useState('');
@@ -21,32 +21,39 @@ export default function SetupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState('');
   const { setupMasterPassword } = useAuth();
   const router = useRouter();
 
-  const validateEmail = (email: string) => {
+  const validateEmail = (value: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+    return re.test(value);
   };
 
   const handleSetup = async () => {
+    setErrorText('');
+
     if (!email.trim()) {
-      Alert.alert('Errore', 'Inserisci il tuo indirizzo email');
+      setErrorText('Inserisci il tuo indirizzo email');
+      showAlert('Errore', 'Inserisci il tuo indirizzo email');
       return;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert('Errore', 'Inserisci un indirizzo email valido');
+      setErrorText('Inserisci un indirizzo email valido');
+      showAlert('Errore', 'Inserisci un indirizzo email valido');
       return;
     }
 
     if (password.length < 6) {
-      Alert.alert('Errore', 'La password deve essere di almeno 6 caratteri');
+      setErrorText('La password deve essere di almeno 6 caratteri');
+      showAlert('Errore', 'La password deve essere di almeno 6 caratteri');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Errore', 'Le password non corrispondono');
+      setErrorText('Le password non corrispondono');
+      showAlert('Errore', 'Le password non corrispondono');
       return;
     }
 
@@ -55,7 +62,9 @@ export default function SetupScreen() {
       await setupMasterPassword(email.trim().toLowerCase(), password);
       router.replace('/home');
     } catch (error: any) {
-      Alert.alert('Errore', error.message || 'Setup fallito');
+      const msg = error.message || 'Setup fallito';
+      setErrorText(msg);
+      showAlert('Errore', msg);
     } finally {
       setLoading(false);
     }
@@ -72,9 +81,9 @@ export default function SetupScreen() {
             <Ionicons name="shield-checkmark" size={80} color="#4ecdc4" />
           </View>
 
-          <Text style={styles.title}>Benvenuto</Text>
+          <Text style={styles.title}>Nuovo account</Text>
           <Text style={styles.subtitle}>
-            Crea il tuo account per iniziare
+            Crea un vault con la tua email. Ogni account ha le proprie password.
           </Text>
 
           <View style={styles.inputContainer}>
@@ -141,6 +150,8 @@ export default function SetupScreen() {
             </TouchableOpacity>
           </View>
 
+          {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+
           <TouchableOpacity
             testID="setup-submit-button"
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -155,6 +166,10 @@ export default function SetupScreen() {
           <Text style={styles.warning}>
             ⚠️ Ricorda la password! L&apos;email servirà per il reset se la dimentichi.
           </Text>
+
+          <TouchableOpacity style={styles.loginLink} onPress={() => router.replace('/login')}>
+            <Text style={styles.loginLinkText}>Hai già un account? Accedi</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -232,5 +247,22 @@ const styles = StyleSheet.create({
     marginTop: 24,
     fontSize: 13,
     lineHeight: 20,
+  },
+  errorText: {
+    color: '#ff6b6b',
+    textAlign: 'center',
+    marginBottom: 16,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  loginLink: {
+    alignItems: 'center',
+    marginTop: 24,
+    padding: 12,
+  },
+  loginLinkText: {
+    color: '#4ecdc4',
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });

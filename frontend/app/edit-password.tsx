@@ -32,7 +32,7 @@ export default function EditPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const { id } = useLocalSearchParams();
-  const { masterPassword } = useAuth();
+  const { masterPassword, userEmail } = useAuth();
   const router = useRouter();
 
   const categories = [
@@ -55,7 +55,7 @@ export default function EditPasswordScreen() {
 
   const loadPassword = async () => {
     try {
-      const passwords = await api.getAllPasswords(masterPassword!);
+      const passwords = await api.getAllPasswords(userEmail, masterPassword!);
       const found = passwords.find(p => p.id === id);
       if (found) {
         setEntry(found);
@@ -113,6 +113,7 @@ export default function EditPasswordScreen() {
         notes: notes,
         category: category,
         tags: tags,
+        email: userEmail,
         master_password: masterPassword,
       });
       // Redirect immediately without Alert callback (works reliably on web/mobile)

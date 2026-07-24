@@ -36,8 +36,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const initializeAuth = async () => {
     await checkSetup();
+    await restoreSession();
     await checkBiometricEnabled();
     setIsCheckingSetup(false);
+  };
+
+  const restoreSession = async () => {
+    try {
+      if (typeof sessionStorage === 'undefined') return;
+      const email = sessionStorage.getItem('pm_user_email') || '';
+      const password = sessionStorage.getItem('pm_master_password') || '';
+      if (email && password) {
+        await api.login(email, password);
+        setMasterPassword(password);
+        setUserEmail(email);
+        setIsAuthenticated(true);
+      } else if (email) {
+        setUserEmail(email);
+      }
+    } catch (error) {
+      console.error('Session restore failed:', error);
+      try {
+        sessionStorage.removeItem('pm_master_password');
+      } catch (_) {}
+    }
+  };
+
+  const persistSession = (email: string, password: string) => {
+    try {
+      if (typeof sessionStorage === 'undefined') return;
+      sessionStorage.setItem('pm_user_email', email);
+      sessionStorage.setItem('pm_master_password', password);
+    } catch (_) {}
+  };
+
+  const clearSession = () => {
+    try {
+      if (typeof sessionStorage === 'undefined') return;
+      sessionStorage.removeItem('pm_master_password');
+      // keep email for login prefills
+    } catch (_) {}
   };
 
   const checkSetup = async () => {
@@ -46,7 +84,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const result = await api.checkSetup();
         setIsSetup(result.is_setup);
-        setUserEmail(result.email || '');
+        // Multi-user: do not overwrite the logged-in email with "first user" from API
+        try {
+          const saved =
+            typeof sessionStorage !== 'undefined'
+              ? sessionStorage.getItem('pm_user_email')
+              : null;
+          if (!saved && result.email) {
+            setUserEmail(result.email);
+          }
+        } catch (_) {
+          if (result.email) setUserEmail(result.email);
+        }
         return;
       } catch (error) {
         lastError = error;
@@ -72,6 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUserEmail(email);
       setIsAuthenticated(true);
       setIsSetup(true);
+      persistSession(email, password);
     } catch (error) {
       throw error;
     }
@@ -83,6 +133,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMasterPassword(password);
       setUserEmail(email);
       setIsAuthenticated(true);
+      persistSession(email, password);
     } catch (error) {
       throw error;
     }
@@ -91,6 +142,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setMasterPassword(null);
     setIsAuthenticated(false);
+    clearSession();
   };
 
   const resetAllData = async () => {
@@ -101,6 +153,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsAuthenticated(false);
       setIsSetup(false);
       setIsBiometricEnabled(false);
+      clearSession();
+      try {
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('pm_user_email');
+        }
+      } catch (_) {}
       // Clear secure storage
       try {
         await storage.setItem('biometric_enabled', 'false');

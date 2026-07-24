@@ -7,25 +7,28 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { showAlert } from '@/src/utils/alert';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const { login, isBiometricEnabled, authenticateWithBiometric } = useAuth();
+  const { login, isBiometricEnabled, authenticateWithBiometric, userEmail } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     checkBiometric();
-  }, []);
+    if (userEmail) {
+      setEmail(userEmail);
+    }
+  }, [userEmail]);
 
   const checkBiometric = async () => {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
@@ -37,24 +40,24 @@ export default function LoginScreen() {
     }
   };
 
-  const validateEmail = (email: string) => {
+  const validateEmail = (value: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return re.test(email);
+    return re.test(value);
   };
 
   const handleLogin = async () => {
     if (!email.trim()) {
-      Alert.alert('Errore', 'Inserisci il tuo indirizzo email');
+      showAlert('Errore', 'Inserisci il tuo indirizzo email');
       return;
     }
 
     if (!validateEmail(email)) {
-      Alert.alert('Errore', 'Inserisci un indirizzo email valido');
+      showAlert('Errore', 'Inserisci un indirizzo email valido');
       return;
     }
 
     if (!password) {
-      Alert.alert('Errore', 'Inserisci la password master');
+      showAlert('Errore', 'Inserisci la password master');
       return;
     }
 
@@ -62,7 +65,7 @@ export default function LoginScreen() {
       await login(email.trim().toLowerCase(), password);
       router.replace('/home');
     } catch (error: any) {
-      Alert.alert('Errore', 'Email o password non validi');
+      showAlert('Errore', error?.message || 'Email o password non validi');
     }
   };
 
@@ -73,10 +76,14 @@ export default function LoginScreen() {
     } catch (error: any) {
       console.log('Biometric auth failed:', error);
       if (error.message && (error.message.includes('cambiata') || error.message.includes('salvata'))) {
-        Alert.alert('Biometrica Disabilitata', error.message);
+        showAlert('Biometrica Disabilitata', error.message);
         setBiometricAvailable(false);
       }
     }
+  };
+
+  const handleCreateAccount = () => {
+    router.push('/setup');
   };
 
   return (
@@ -165,7 +172,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             testID="create-account-button"
             style={styles.createAccountButton}
-            onPress={() => router.push('/setup')}
+            onPress={handleCreateAccount}
           >
             <Ionicons name="person-add" size={20} color="#4ecdc4" />
             <Text style={styles.createAccountText}>Crea nuovo account</Text>
