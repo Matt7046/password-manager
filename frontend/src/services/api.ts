@@ -20,15 +20,45 @@ export const api = {
     return response.json();
   },
 
-  setupMasterPassword: async (masterPassword: string) => {
+  setupMasterPassword: async (email: string, masterPassword: string) => {
     const response = await fetch(`${API_URL}/auth/setup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ master_password: masterPassword })
+      body: JSON.stringify({ email, master_password: masterPassword })
     });
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.detail || 'Setup failed');
+    }
+    return response.json();
+  },
+
+  forgotPassword: async (email: string) => {
+    const response = await fetch(`${API_URL}/auth/forgot-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Failed to send OTP');
+    }
+    return response.json();
+  },
+
+  verifyOTPReset: async (email: string, otpCode: string, newMasterPassword: string) => {
+    const response = await fetch(`${API_URL}/auth/verify-otp-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        otp_code: otpCode,
+        new_master_password: newMasterPassword
+      })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'OTP verification failed');
     }
     return response.json();
   },

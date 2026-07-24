@@ -9,9 +9,10 @@ interface AuthContextType {
   isSetup: boolean;
   isCheckingSetup: boolean;
   isBiometricEnabled: boolean;
+  userEmail: string;
   login: (password: string) => Promise<void>;
   logout: () => void;
-  setupMasterPassword: (password: string) => Promise<void>;
+  setupMasterPassword: (email: string, password: string) => Promise<void>;
   checkSetup: () => Promise<void>;
   enableBiometric: () => Promise<void>;
   authenticateWithBiometric: () => Promise<void>;
@@ -26,6 +27,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isSetup, setIsSetup] = useState(false);
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
+  const [userEmail, setUserEmail] = useState('');
 
   useEffect(() => {
     initializeAuth();
@@ -44,10 +46,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const result = await api.checkSetup();
         setIsSetup(result.is_setup);
+        setUserEmail(result.email || '');
         return;
       } catch (error) {
         lastError = error;
-        // Wait a bit before retrying
         await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
@@ -63,10 +65,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const setupMasterPassword = async (password: string) => {
+  const setupMasterPassword = async (email: string, password: string) => {
     try {
-      await api.setupMasterPassword(password);
+      await api.setupMasterPassword(email, password);
       setMasterPassword(password);
+      setUserEmail(email);
       setIsAuthenticated(true);
       setIsSetup(true);
     } catch (error) {
@@ -146,6 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSetup,
         isCheckingSetup,
         isBiometricEnabled,
+        userEmail,
         login,
         logout,
         setupMasterPassword,

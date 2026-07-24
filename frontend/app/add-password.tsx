@@ -22,7 +22,7 @@ export default function AddPasswordScreen() {
   const [password, setPassword] = useState('');
   const [url, setUrl] = useState('');
   const [notes, setNotes] = useState('');
-  const [category, setCategory] = useState('Other');
+  const [category, setCategory] = useState('Altro');
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
@@ -34,15 +34,15 @@ export default function AddPasswordScreen() {
   const categories = [
     'Social Media',
     'Email',
-    'Banking',
-    'Shopping',
-    'Work',
-    'Entertainment',
-    'Gaming',
-    'Travel',
-    'Education',
-    'Health',
-    'Other',
+    'Banca',
+    'Acquisti',
+    'Lavoro',
+    'Intrattenimento',
+    'Videogiochi',
+    'Viaggi',
+    'Istruzione',
+    'Salute',
+    'Altro',
   ];
 
   const handleAddTag = () => {

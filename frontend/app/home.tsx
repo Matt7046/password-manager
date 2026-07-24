@@ -28,7 +28,7 @@ export default function HomeScreen() {
   const { masterPassword, logout, isBiometricEnabled, enableBiometric } = useAuth();
   const router = useRouter();
 
-  const categories = ['Tutti', 'Social Media', 'Email', 'Banking', 'Shopping', 'Work', 'Entertainment', 'Gaming', 'Travel', 'Education', 'Health', 'Other'];
+  const categories = ['Tutti', 'Social Media', 'Email', 'Banca', 'Acquisti', 'Lavoro', 'Intrattenimento', 'Videogiochi', 'Viaggi', 'Istruzione', 'Salute', 'Altro'];
 
   // Reload passwords every time this screen gets focus (after add/edit/delete)
   useFocusEffect(
@@ -111,15 +111,15 @@ export default function HomeScreen() {
     const icons: { [key: string]: any } = {
       'Social Media': 'share-social',
       'Email': 'mail',
-      'Banking': 'cash',
-      'Shopping': 'cart',
-      'Work': 'briefcase',
-      'Entertainment': 'film',
-      'Gaming': 'game-controller',
-      'Travel': 'airplane',
-      'Education': 'school',
-      'Health': 'fitness',
-      'Other': 'ellipsis-horizontal',
+      'Banca': 'cash',
+      'Acquisti': 'cart',
+      'Lavoro': 'briefcase',
+      'Intrattenimento': 'film',
+      'Videogiochi': 'game-controller',
+      'Viaggi': 'airplane',
+      'Istruzione': 'school',
+      'Salute': 'fitness',
+      'Altro': 'ellipsis-horizontal',
     };
     return icons[category] || 'key';
   };

@@ -11,7 +11,9 @@ BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://password-vault-167
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
+TEST_EMAIL = "test@example.com"
 TEST_PASSWORD = "TestPass123"
+NEW_PASSWORD = "NewPass456"
 
 
 @pytest.fixture(scope="session")
@@ -19,14 +21,19 @@ def base_url():
     return BASE_URL
 
 
-@pytest.fixture(scope="session", autouse=True)
-def clean_db():
-    """Reset DB before session starts."""
+@pytest.fixture(scope="session")
+def mongo_db():
     client = MongoClient(MONGO_URL)
-    db = client[DB_NAME]
-    db.users.delete_many({})
-    db.password_entries.delete_many({})
+    yield client[DB_NAME]
     client.close()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def clean_db(mongo_db):
+    """Reset DB before session starts."""
+    mongo_db.users.delete_many({})
+    mongo_db.password_entries.delete_many({})
+    mongo_db.otp_codes.delete_many({})
     yield
 
 
@@ -38,5 +45,15 @@ def api_client():
 
 
 @pytest.fixture(scope="session")
+def test_email():
+    return TEST_EMAIL
+
+
+@pytest.fixture(scope="session")
 def master_password():
     return TEST_PASSWORD
+
+
+@pytest.fixture(scope="session")
+def new_password():
+    return NEW_PASSWORD

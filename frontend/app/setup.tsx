@@ -15,14 +15,31 @@ import { useAuth } from '@/src/contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function SetupScreen() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { setupMasterPassword } = useAuth();
   const router = useRouter();
 
+  const validateEmail = (email: string) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  };
+
   const handleSetup = async () => {
+    if (!email.trim()) {
+      Alert.alert('Errore', 'Inserisci il tuo indirizzo email');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert('Errore', 'Inserisci un indirizzo email valido');
+      return;
+    }
+
     if (password.length < 6) {
       Alert.alert('Errore', 'La password deve essere di almeno 6 caratteri');
       return;
@@ -33,12 +50,14 @@ export default function SetupScreen() {
       return;
     }
 
+    setLoading(true);
     try {
-      await setupMasterPassword(password);
-      // Redirect direttamente alla home (l'utente è già autenticato dopo il setup)
+      await setupMasterPassword(email.trim().toLowerCase(), password);
       router.replace('/home');
     } catch (error: any) {
       Alert.alert('Errore', error.message || 'Setup fallito');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,7 +66,7 @@ export default function SetupScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <View style={styles.iconContainer}>
             <Ionicons name="shield-checkmark" size={80} color="#4ecdc4" />
@@ -55,12 +74,27 @@ export default function SetupScreen() {
 
           <Text style={styles.title}>Benvenuto</Text>
           <Text style={styles.subtitle}>
-            Crea una password master per proteggere le tue password
+            Crea il tuo account per iniziare
           </Text>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              testID="setup-email-input"
+              style={styles.input}
+              placeholder="Email (per reset password)"
+              placeholderTextColor="#666"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
 
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
+              testID="setup-password-input"
               style={styles.input}
               placeholder="Password Master"
               placeholderTextColor="#666"
@@ -69,7 +103,11 @@ export default function SetupScreen() {
               onChangeText={setPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              activeOpacity={0.6}
+            >
               <Ionicons
                 name={showPassword ? 'eye-off' : 'eye'}
                 size={20}
@@ -81,6 +119,7 @@ export default function SetupScreen() {
           <View style={styles.inputContainer}>
             <Ionicons name="lock-closed" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
+              testID="setup-confirm-password-input"
               style={styles.input}
               placeholder="Conferma Password"
               placeholderTextColor="#666"
@@ -89,7 +128,11 @@ export default function SetupScreen() {
               onChangeText={setConfirmPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity onPress={() => setShowConfirm(!showConfirm)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} activeOpacity={0.6}>
+            <TouchableOpacity
+              onPress={() => setShowConfirm(!showConfirm)}
+              hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+              activeOpacity={0.6}
+            >
               <Ionicons
                 name={showConfirm ? 'eye-off' : 'eye'}
                 size={20}
@@ -98,12 +141,19 @@ export default function SetupScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleSetup}>
-            <Text style={styles.buttonText}>Crea Password Master</Text>
+          <TouchableOpacity
+            testID="setup-submit-button"
+            style={[styles.button, loading && styles.buttonDisabled]}
+            onPress={handleSetup}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? 'Creazione...' : 'Crea Account'}
+            </Text>
           </TouchableOpacity>
 
           <Text style={styles.warning}>
-            ⚠️ Ricorda questa password! Non può essere recuperata.
+            ⚠️ Ricorda la password! L'email servirà per il reset se la dimentichi.
           </Text>
         </View>
       </ScrollView>
@@ -168,15 +218,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
   buttonText: {
     color: '#1a1a2e',
     fontSize: 18,
     fontWeight: 'bold',
   },
   warning: {
-    color: '#ff6b6b',
+    color: '#ffa500',
     textAlign: 'center',
     marginTop: 24,
-    fontSize: 14,
+    fontSize: 13,
+    lineHeight: 20,
   },
 });
