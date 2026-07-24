@@ -134,7 +134,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.success) {
       const savedPassword = await storage.secureGet('master_password', null);
       if (savedPassword) {
-        await login(savedPassword);
+        try {
+          await login(savedPassword);
+        } catch (error) {
+          // Saved password is no longer valid (e.g. after password reset)
+          // Disable biometric authentication and clear stored password
+          await storage.secureSet('master_password', '');
+          await storage.setItem('biometric_enabled', 'false');
+          setIsBiometricEnabled(false);
+          throw new Error('La password è stata cambiata. Accedi con la nuova password master e ri-abilita la biometrica.');
+        }
+      } else {
+        // No saved password - disable biometric
+        await storage.setItem('biometric_enabled', 'false');
+        setIsBiometricEnabled(false);
+        throw new Error('Nessuna password salvata. Accedi con la password master.');
       }
     } else {
       throw new Error('Biometric authentication failed');

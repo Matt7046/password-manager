@@ -56,6 +56,12 @@ export default function LoginScreen() {
       router.replace('/home');
     } catch (error: any) {
       console.log('Biometric auth failed:', error);
+      // Show message if password was changed
+      if (error.message && (error.message.includes('cambiata') || error.message.includes('salvata'))) {
+        Alert.alert('Biometrica Disabilitata', error.message);
+        // Re-check biometric availability (will be false now)
+        setBiometricAvailable(false);
+      }
     }
   };
 
