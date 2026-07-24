@@ -7,12 +7,16 @@ from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-BASE_URL = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://password-vault-167.preview.emergentagent.com").rstrip("/")
+_frontend_env = Path(__file__).parent.parent.parent / "frontend" / ".env"
+if _frontend_env.exists():
+    load_dotenv(_frontend_env, override=False)
+
+BASE_URL = os.environ["EXPO_PUBLIC_BACKEND_URL"].rstrip("/")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 
 TEST_EMAIL = "test@example.com"
-TEST_PASSWORD = "TestPass123"
+TEST_PASSWORD = "OldPass123"
 NEW_PASSWORD = "NewPass456"
 
 

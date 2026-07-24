@@ -136,7 +136,7 @@ export default function ForgotPasswordScreen() {
               </TouchableOpacity>
 
               <Text style={styles.warning}>
-                ⚠️ Attenzione: Il reset cancellerà tutte le password salvate.
+                ✓ Le password salvate saranno preservate dopo il reset.
               </Text>
             </>
           ) : (
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   warning: {
-    color: '#ffa500',
+    color: '#4ecdc4',
     textAlign: 'center',
     marginTop: 24,
     fontSize: 13,

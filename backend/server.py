@@ -29,25 +29,28 @@ db = client[os.environ['DB_NAME']]
 # Resend setup
 resend.api_key = os.environ.get('RESEND_API_KEY', '')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'onboarding@resend.dev')
+SERVER_SECRET = os.environ.get('SERVER_SECRET', '')
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Encryption setup - generate key from master password
-def get_encryption_key(master_password: str) -> bytes:
-    """Generate a consistent encryption key from master password"""
-    key = hashlib.sha256(master_password.encode()).digest()
+# Encryption setup - generate key from email + server secret
+# This allows password entries to remain accessible after master password reset
+def get_encryption_key(email: str) -> bytes:
+    """Generate a consistent encryption key from email + server secret"""
+    combined = f"{email.lower()}:{SERVER_SECRET}"
+    key = hashlib.sha256(combined.encode()).digest()
     return base64.urlsafe_b64encode(key)
 
-def encrypt_password(password: str, master_password: str) -> str:
-    """Encrypt a password using master password"""
-    key = get_encryption_key(master_password)
+def encrypt_password(password: str, email: str) -> str:
+    """Encrypt a password using email-derived key"""
+    key = get_encryption_key(email)
     f = Fernet(key)
     return f.encrypt(password.encode()).decode()
 
-def decrypt_password(encrypted_password: str, master_password: str) -> str:
-    """Decrypt a password using master password"""
-    key = get_encryption_key(master_password)
+def decrypt_password(encrypted_password: str, email: str) -> str:
+    """Decrypt a password using email-derived key"""
+    key = get_encryption_key(email)
     f = Fernet(key)
     return f.decrypt(encrypted_password.encode()).decode()
 
@@ -74,8 +77,8 @@ def send_otp_email(to_email: str, otp_code: str) -> bool:
                         Questo codice è valido per 10 minuti.<br/>
                         Se non hai richiesto questo reset, ignora questa email.
                     </p>
-                    <p style="color: #ff6b6b; font-size: 12px; text-align: center; margin-top: 30px;">
-                        ⚠️ Attenzione: il reset cancellerà tutte le password salvate.
+                    <p style="color: #4ecdc4; font-size: 12px; text-align: center; margin-top: 30px;">
+                        ✓ Le tue password salvate saranno preservate dopo il reset.
                     </p>
                 </div>
             </body>
@@ -233,7 +236,8 @@ async def forgot_password(request: ForgotPasswordRequest):
 
 @api_router.post("/auth/verify-otp-reset")
 async def verify_otp_reset(request: VerifyOTPResetRequest):
-    """Verify OTP code and reset master password (deletes all saved passwords)"""
+    """Verify OTP code and reset master password.
+    Password entries are PRESERVED because they're encrypted with email-derived key."""
     # Find OTP
     otp_record = await db.otp_codes.find_one({
         "email": request.email.lower(),
@@ -247,21 +251,20 @@ async def verify_otp_reset(request: VerifyOTPResetRequest):
         await db.otp_codes.delete_one({"_id": otp_record["_id"]})
         raise HTTPException(status_code=400, detail="Codice scaduto")
     
-    # Delete all data
-    await db.users.delete_many({})
-    await db.password_entries.delete_many({})
+    # Update ONLY the master password (keep entries intact)
+    hashed_password = pwd_context.hash(request.new_master_password)
+    result = await db.users.update_one(
+        {"user_id": "master_user", "email": request.email.lower()},
+        {"$set": {"master_password": hashed_password}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    
+    # Clean up the used OTP
     await db.otp_codes.delete_many({"email": request.email.lower()})
     
-    # Create new user with new master password
-    hashed_password = pwd_context.hash(request.new_master_password)
-    await db.users.insert_one({
-        "user_id": "master_user",
-        "email": request.email.lower(),
-        "master_password": hashed_password,
-        "created_at": datetime.utcnow()
-    })
-    
-    return {"success": True, "message": "Password resettata con successo"}
+    return {"success": True, "message": "Password resettata con successo. Le password salvate sono state preservate."}
 
 @api_router.delete("/auth/reset")
 async def reset_all_data():
@@ -280,7 +283,7 @@ async def create_password_entry(entry: PasswordEntryCreate):
     if not user or not pwd_context.verify(entry.master_password, user["master_password"]):
         raise HTTPException(status_code=401, detail="Invalid master password")
     
-    encrypted_password = encrypt_password(entry.password, entry.master_password)
+    encrypted_password = encrypt_password(entry.password, user["email"])
     
     entry_doc = {
         "account_name": entry.account_name,
@@ -312,7 +315,7 @@ async def get_all_passwords(master_password: str):
     
     for entry in entries:
         try:
-            decrypted_password = decrypt_password(entry["password"], master_password)
+            decrypted_password = decrypt_password(entry["password"], user["email"])
             entry["id"] = str(entry["_id"])
             entry["password"] = decrypted_password
             result.append(PasswordEntryResponse(**entry))
@@ -337,7 +340,7 @@ async def get_password_entry(entry_id: str, master_password: str):
     if not entry:
         raise HTTPException(status_code=404, detail="Password entry not found")
     
-    decrypted_password = decrypt_password(entry["password"], master_password)
+    decrypted_password = decrypt_password(entry["password"], user["email"])
     entry["id"] = str(entry["_id"])
     entry["password"] = decrypted_password
     
@@ -364,7 +367,7 @@ async def update_password_entry(entry_id: str, update: PasswordEntryUpdate):
     if update.username is not None:
         update_doc["username"] = update.username
     if update.password is not None:
-        update_doc["password"] = encrypt_password(update.password, update.master_password)
+        update_doc["password"] = encrypt_password(update.password, user["email"])
     if update.url is not None:
         update_doc["url"] = update.url
     if update.notes is not None:
@@ -382,7 +385,7 @@ async def update_password_entry(entry_id: str, update: PasswordEntryUpdate):
     )
     
     updated_entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
-    decrypted_password = decrypt_password(updated_entry["password"], update.master_password)
+    decrypted_password = decrypt_password(updated_entry["password"], user["email"])
     updated_entry["id"] = str(updated_entry["_id"])
     updated_entry["password"] = decrypted_password
     
@@ -419,7 +422,7 @@ async def search_passwords(search: SearchRequest):
     result = []
     for entry in entries:
         try:
-            decrypted_password = decrypt_password(entry["password"], search.master_password)
+            decrypted_password = decrypt_password(entry["password"], user["email"])
             entry["id"] = str(entry["_id"])
             entry["password"] = decrypted_password
             result.append(PasswordEntryResponse(**entry))

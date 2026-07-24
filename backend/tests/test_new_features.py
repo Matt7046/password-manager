@@ -1,13 +1,15 @@
-"""Backend tests for the new features:
-  - setup with email + master_password
-  - forgot-password (OTP via Resend + Mongo)
-  - verify-otp-reset (deletes existing user + entries, creates new user)
-  - /auth/check now returns is_setup + email
-  - /categories returns Italian names
+"""Backend tests for Password Manager (post master-password-reset architecture).
 
-Email delivery through Resend cannot be reliably verified from CI, but the OTP
-code is persisted in the `otp_codes` collection which we assert directly.
+CRITICAL BUG FIX under test (Jan 2026):
+    After master-password reset via OTP, previously saved password entries
+    MUST be preserved and remain decryptable. Entries are encrypted with a
+    key derived from `email + SERVER_SECRET` instead of the master password.
+
+Tests are kept in a single module so pytest-xdist `--dist loadscope`
+pins them to one worker (they share MongoDB state).
 """
+from datetime import datetime, timedelta
+
 import pytest
 
 
@@ -17,78 +19,72 @@ ITALIAN_CATEGORIES = {
     "Salute", "Altro",
 }
 
+TEST_EMAIL = "test@example.com"
+OLD_PASSWORD = "OldPass123"
+NEW_PASSWORD = "NewPass456"
 
-# --------- Categories in Italian ---------
+
+# ---------- 1. Categories ----------
 class TestCategoriesItalian:
     def test_categories_are_italian(self, api_client, base_url):
         r = api_client.get(f"{base_url}/api/categories")
         assert r.status_code == 200
-        cats = r.json()["categories"]
-        assert set(cats) == ITALIAN_CATEGORIES, f"Got: {cats}"
+        assert set(r.json()["categories"]) == ITALIAN_CATEGORIES
 
 
-# --------- /auth/check when nothing is setup ---------
+# ---------- 2. /auth/check when nothing is set up ----------
 class TestCheckBeforeSetup:
     def test_check_returns_false_and_empty_email(self, api_client, base_url, mongo_db):
-        # Ensure completely clean
         mongo_db.users.delete_many({})
+        mongo_db.password_entries.delete_many({})
+        mongo_db.otp_codes.delete_many({})
         r = api_client.get(f"{base_url}/api/auth/check")
         assert r.status_code == 200
-        data = r.json()
-        assert data["is_setup"] is False
-        assert data["email"] == ""
+        assert r.json() == {"is_setup": False, "email": ""}
 
 
-# --------- Setup with email + password ---------
+# ---------- 3. Setup + Login ----------
 class TestSetupWithEmail:
-    def test_01_setup_requires_email(self, api_client, base_url, master_password, mongo_db):
+    def test_01_setup_requires_email(self, api_client, base_url, mongo_db):
         mongo_db.users.delete_many({})
-        r = api_client.post(
-            f"{base_url}/api/auth/setup",
-            json={"master_password": master_password},  # missing email
-        )
+        r = api_client.post(f"{base_url}/api/auth/setup",
+                            json={"master_password": OLD_PASSWORD})
         assert r.status_code == 422
 
-    def test_02_setup_rejects_invalid_email(self, api_client, base_url, master_password):
-        r = api_client.post(
-            f"{base_url}/api/auth/setup",
-            json={"email": "not-an-email", "master_password": master_password},
-        )
+    def test_02_setup_rejects_invalid_email(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/setup",
+                            json={"email": "not-an-email",
+                                  "master_password": OLD_PASSWORD})
         assert r.status_code == 422
 
-    def test_03_setup_success(self, api_client, base_url, test_email, master_password, mongo_db):
+    def test_03_setup_success(self, api_client, base_url, mongo_db):
         mongo_db.users.delete_many({})
-        r = api_client.post(
-            f"{base_url}/api/auth/setup",
-            json={"email": test_email, "master_password": master_password},
-        )
+        r = api_client.post(f"{base_url}/api/auth/setup",
+                            json={"email": TEST_EMAIL,
+                                  "master_password": OLD_PASSWORD})
         assert r.status_code == 200, r.text
-        data = r.json()
-        assert data["user_id"] == "master_user"
-        assert data["email"] == test_email
-        # Verify persistence
-        user = mongo_db.users.find_one({"user_id": "master_user"})
-        assert user is not None
-        assert user["email"] == test_email
+        d = r.json()
+        assert d["user_id"] == "master_user"
+        assert d["email"] == TEST_EMAIL
+        assert mongo_db.users.find_one({"user_id": "master_user"})["email"] == TEST_EMAIL
 
-    def test_04_check_returns_true_and_email(self, api_client, base_url, test_email):
+    def test_04_check_returns_true_and_email(self, api_client, base_url):
         r = api_client.get(f"{base_url}/api/auth/check")
         assert r.status_code == 200
-        data = r.json()
-        assert data["is_setup"] is True
-        assert data["email"] == test_email
+        d = r.json()
+        assert d["is_setup"] is True
+        assert d["email"] == TEST_EMAIL
 
-    def test_05_setup_twice_rejected(self, api_client, base_url, test_email, master_password):
-        r = api_client.post(
-            f"{base_url}/api/auth/setup",
-            json={"email": test_email, "master_password": master_password},
-        )
+    def test_05_setup_twice_rejected(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/setup",
+                            json={"email": TEST_EMAIL,
+                                  "master_password": OLD_PASSWORD})
         assert r.status_code == 400
 
-    def test_06_login_with_correct_password(self, api_client, base_url, master_password):
+    def test_06_login_with_correct_password(self, api_client, base_url):
         r = api_client.post(f"{base_url}/api/auth/login",
-                            json={"master_password": master_password})
-        assert r.status_code == 200, r.text
+                            json={"master_password": OLD_PASSWORD})
+        assert r.status_code == 200
         assert r.json()["success"] is True
 
     def test_07_login_wrong_password(self, api_client, base_url):
@@ -97,121 +93,239 @@ class TestSetupWithEmail:
         assert r.status_code == 401
 
 
-# --------- Forgot password ---------
+# ---------- 4. Forgot-password ----------
 class TestForgotPassword:
-    def test_01_forgot_password_wrong_email(self, api_client, base_url):
-        r = api_client.post(
-            f"{base_url}/api/auth/forgot-password",
-            json={"email": "someone-else@example.com"},
-        )
+    def test_01_wrong_email(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/forgot-password",
+                            json={"email": "someone-else@example.com"})
         assert r.status_code == 404
 
-    def test_02_forgot_password_invalid_email_format(self, api_client, base_url):
-        r = api_client.post(
-            f"{base_url}/api/auth/forgot-password",
-            json={"email": "not-an-email"},
-        )
+    def test_02_invalid_email_format(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/forgot-password",
+                            json={"email": "not-an-email"})
         assert r.status_code == 422
 
-    def test_03_forgot_password_success_creates_otp(self, api_client, base_url, test_email, mongo_db):
-        # Clear any old OTPs
+    def test_03_valid_email_creates_otp(self, api_client, base_url, mongo_db):
         mongo_db.otp_codes.delete_many({})
-        r = api_client.post(
-            f"{base_url}/api/auth/forgot-password",
-            json={"email": test_email},
-        )
-        # If Resend returns error at send-time, backend responds 500. In that
-        # case, still verify how far we got and skip further tests with a
-        # helpful message so the main agent can act.
+        r = api_client.post(f"{base_url}/api/auth/forgot-password",
+                            json={"email": TEST_EMAIL})
         if r.status_code == 500:
-            pytest.skip(f"Resend email send failed in this env: {r.text}")
-        assert r.status_code == 200, r.text
-        assert r.json()["success"] is True
-        otp = mongo_db.otp_codes.find_one({"email": test_email})
+            pytest.skip(f"Resend send failed in CI env: {r.text}")
+        assert r.status_code == 200
+        otp = mongo_db.otp_codes.find_one({"email": TEST_EMAIL})
         assert otp is not None
-        assert len(otp["otp_code"]) == 6
-        assert otp["otp_code"].isdigit()
+        assert len(otp["otp_code"]) == 6 and otp["otp_code"].isdigit()
 
 
-# --------- Verify OTP reset ---------
-class TestVerifyOtpReset:
-    def test_01_invalid_otp_rejected(self, api_client, base_url, test_email, new_password):
-        r = api_client.post(
-            f"{base_url}/api/auth/verify-otp-reset",
-            json={"email": test_email, "otp_code": "000000",
-                  "new_master_password": new_password},
-        )
+# ---------- 5. Verify-OTP-reset — basic guardrails ----------
+class TestVerifyOtpResetGuards:
+    def test_01_invalid_otp_rejected(self, api_client, base_url):
+        r = api_client.post(f"{base_url}/api/auth/verify-otp-reset",
+                            json={"email": TEST_EMAIL, "otp_code": "000000",
+                                  "new_master_password": NEW_PASSWORD})
         assert r.status_code == 400
 
-    def test_02_reset_with_valid_otp(self, api_client, base_url, test_email,
-                                     master_password, new_password, mongo_db):
-        # Seed a valid OTP directly (avoids Resend dependency)
-        from datetime import datetime, timedelta
-        mongo_db.otp_codes.delete_many({"email": test_email})
+    def test_02_expired_otp_rejected(self, api_client, base_url, mongo_db):
+        mongo_db.otp_codes.delete_many({"email": TEST_EMAIL})
         mongo_db.otp_codes.insert_one({
-            "email": test_email,
-            "otp_code": "123456",
-            "created_at": datetime.utcnow(),
-            "expires_at": datetime.utcnow() + timedelta(minutes=10),
-        })
-
-        # Add one password entry to verify wipe
-        entry_payload = {
-            "account_name": "TEST_ToBeDeleted",
-            "username": "u",
-            "password": "p",
-            "category": "Email",
-            "tags": [],
-            "master_password": master_password,
-        }
-        r = api_client.post(f"{base_url}/api/passwords", json=entry_payload)
-        assert r.status_code == 200, r.text
-
-        # Perform reset
-        r = api_client.post(
-            f"{base_url}/api/auth/verify-otp-reset",
-            json={"email": test_email, "otp_code": "123456",
-                  "new_master_password": new_password},
-        )
-        assert r.status_code == 200, r.text
-        assert r.json()["success"] is True
-
-        # OTP consumed
-        assert mongo_db.otp_codes.find_one({"email": test_email}) is None
-
-        # Password entries wiped
-        assert mongo_db.password_entries.count_documents({}) == 0
-
-        # New user exists with new password
-        r = api_client.post(f"{base_url}/api/auth/login",
-                            json={"master_password": new_password})
-        assert r.status_code == 200, r.text
-
-        # Old password no longer works
-        r = api_client.post(f"{base_url}/api/auth/login",
-                            json={"master_password": master_password})
-        assert r.status_code == 401
-
-        # Email still returned by /auth/check
-        r = api_client.get(f"{base_url}/api/auth/check")
-        assert r.status_code == 200
-        assert r.json()["email"] == test_email
-
-    def test_03_expired_otp_rejected(self, api_client, base_url, test_email,
-                                     new_password, mongo_db):
-        from datetime import datetime, timedelta
-        mongo_db.otp_codes.delete_many({"email": test_email})
-        mongo_db.otp_codes.insert_one({
-            "email": test_email,
+            "email": TEST_EMAIL,
             "otp_code": "999999",
             "created_at": datetime.utcnow() - timedelta(minutes=20),
             "expires_at": datetime.utcnow() - timedelta(minutes=10),
         })
+        r = api_client.post(f"{base_url}/api/auth/verify-otp-reset",
+                            json={"email": TEST_EMAIL, "otp_code": "999999",
+                                  "new_master_password": NEW_PASSWORD})
+        assert r.status_code == 400
+        # Expired OTP cleaned up
+        assert mongo_db.otp_codes.find_one({"email": TEST_EMAIL, "otp_code": "999999"}) is None
+
+
+# =============================================================================
+# CRITICAL BUG FIX: Master-password reset must PRESERVE saved password entries.
+# =============================================================================
+SEED_ENTRIES = [
+    {"account_name": "TEST_Gmail",    "username": "alice@gmail.com",
+     "password": "GmailPlainPwd!42",  "url": "https://gmail.com",
+     "notes": "primary", "category": "Email",         "tags": ["personal"]},
+    {"account_name": "TEST_Facebook", "username": "alice.fb",
+     "password": "FbSuperSecret#77",  "url": "https://facebook.com",
+     "notes": "",        "category": "Social Media",  "tags": ["social"]},
+    {"account_name": "TEST_Amazon",   "username": "alice_amz",
+     "password": "AmzShop$2025",      "url": "https://amazon.com",
+     "notes": "family",  "category": "Acquisti",      "tags": ["shopping", "family"]},
+]
+
+
+class TestResetPreservesEntries:
+    """CRITICAL E2E test of the master-password-reset bug fix.
+
+    Consolidated into ONE atomic test method so pytest-xdist (--dist loadscope)
+    runs the entire flow on a single worker without another class interleaving
+    DB writes. Each assertion has a distinct failure message.
+    """
+
+    def test_full_reset_preserves_entries_flow(self, api_client, base_url, mongo_db):
+        # ---- 1. Fresh setup with OldPass123 ----
+        mongo_db.users.delete_many({})
+        mongo_db.password_entries.delete_many({})
+        mongo_db.otp_codes.delete_many({})
+        r = api_client.post(
+            f"{base_url}/api/auth/setup",
+            json={"email": TEST_EMAIL, "master_password": OLD_PASSWORD},
+        )
+        assert r.status_code == 200, f"setup: {r.text}"
+
+        # ---- 2. Add 3 password entries ----
+        for entry in SEED_ENTRIES:
+            r = api_client.post(
+                f"{base_url}/api/passwords",
+                json={**entry, "master_password": OLD_PASSWORD},
+            )
+            assert r.status_code == 200, f"create {entry['account_name']}: {r.text}"
+            body = r.json()
+            assert body["account_name"] == entry["account_name"]
+            assert body["password"] == entry["password"], "plaintext echo"
+
+        # ---- 3. List returns 3 entries with correct plaintext ----
+        r = api_client.get(
+            f"{base_url}/api/passwords", params={"master_password": OLD_PASSWORD}
+        )
+        assert r.status_code == 200, f"list before reset: {r.text}"
+        entries = r.json()
+        assert len(entries) == 3
+        got = {e["account_name"]: e["password"] for e in entries}
+        for e in SEED_ENTRIES:
+            assert got[e["account_name"]] == e["password"]
+
+        # ---- 4. DB stores ciphertext, not plaintext ----
+        docs = list(mongo_db.password_entries.find())
+        assert len(docs) == 3
+        plaintexts = {e["password"] for e in SEED_ENTRIES}
+        for d in docs:
+            assert d["password"] not in plaintexts, "plaintext password in DB!"
+            assert d["password"].startswith("gAAAA"), "not a Fernet token"
+        before_ids = {str(d["_id"]) for d in docs}
+
+        # ---- 5. Forgot-password → obtain OTP ----
+        mongo_db.otp_codes.delete_many({})
+        r = api_client.post(
+            f"{base_url}/api/auth/forgot-password", json={"email": TEST_EMAIL}
+        )
+        if r.status_code == 500:
+            # Resend often fails in CI (unverified sender). Seed OTP directly.
+            mongo_db.otp_codes.insert_one({
+                "email": TEST_EMAIL, "otp_code": "424242",
+                "created_at": datetime.utcnow(),
+                "expires_at": datetime.utcnow() + timedelta(minutes=10),
+            })
+        else:
+            assert r.status_code == 200, f"forgot-password: {r.text}"
+        otp_doc = mongo_db.otp_codes.find_one({"email": TEST_EMAIL})
+        assert otp_doc is not None and len(otp_doc["otp_code"]) == 6
+        otp_code = otp_doc["otp_code"]
+
+        # ---- 6. Verify-OTP-reset: MUST preserve entries ----
         r = api_client.post(
             f"{base_url}/api/auth/verify-otp-reset",
-            json={"email": test_email, "otp_code": "999999",
-                  "new_master_password": new_password},
+            json={"email": TEST_EMAIL, "otp_code": otp_code,
+                  "new_master_password": NEW_PASSWORD},
         )
-        assert r.status_code == 400
-        # Expired OTP should be cleaned up
-        assert mongo_db.otp_codes.find_one({"email": test_email, "otp_code": "999999"}) is None
+        assert r.status_code == 200, f"verify-otp-reset: {r.text}"
+        assert r.json()["success"] is True
+
+        # OTP consumed
+        assert mongo_db.otp_codes.find_one({"email": TEST_EMAIL}) is None
+
+        # Entries survive with SAME _ids (proves not deleted/replaced)
+        after_ids = {str(d["_id"]) for d in mongo_db.password_entries.find({}, {"_id": 1})}
+        assert after_ids == before_ids, (
+            f"BUG NOT FIXED: entries were mutated. before={before_ids} after={after_ids}"
+        )
+
+        # User doc still there, email unchanged
+        u = mongo_db.users.find_one({"user_id": "master_user"})
+        assert u is not None and u["email"] == TEST_EMAIL
+
+        # ---- 7. Old password rejected ----
+        r = api_client.post(
+            f"{base_url}/api/auth/login", json={"master_password": OLD_PASSWORD}
+        )
+        assert r.status_code == 401, "old password should not work"
+
+        # ---- 8. New password accepted ----
+        r = api_client.post(
+            f"{base_url}/api/auth/login", json={"master_password": NEW_PASSWORD}
+        )
+        assert r.status_code == 200 and r.json()["success"] is True
+
+        # ---- 9. Entries still decryptable with the new password ----
+        r = api_client.get(
+            f"{base_url}/api/passwords", params={"master_password": NEW_PASSWORD}
+        )
+        assert r.status_code == 200, f"list after reset: {r.text}"
+        entries = r.json()
+        assert len(entries) == 3, (
+            f"BUG NOT FIXED: expected 3 preserved entries, got {len(entries)}"
+        )
+        got = {e["account_name"]: e["password"] for e in entries}
+        for e in SEED_ENTRIES:
+            assert got[e["account_name"]] == e["password"], (
+                f"decrypt mismatch for {e['account_name']}: "
+                f"expected {e['password']}, got {got.get(e['account_name'])}"
+            )
+
+        # ---- 10. Add / GET / update / delete new entry with NEW password ----
+        r = api_client.post(
+            f"{base_url}/api/passwords",
+            json={"account_name": "TEST_AfterReset", "username": "post",
+                  "password": "AfterResetPwd!", "category": "Altro",
+                  "tags": [], "master_password": NEW_PASSWORD},
+        )
+        assert r.status_code == 200, f"add after reset: {r.text}"
+        new_id = r.json()["id"]
+
+        r = api_client.get(
+            f"{base_url}/api/passwords/{new_id}",
+            params={"master_password": NEW_PASSWORD},
+        )
+        assert r.status_code == 200
+        assert r.json()["password"] == "AfterResetPwd!"
+
+        r = api_client.put(
+            f"{base_url}/api/passwords/{new_id}",
+            json={"password": "UpdatedAfterReset!",
+                  "master_password": NEW_PASSWORD},
+        )
+        assert r.status_code == 200
+        assert r.json()["password"] == "UpdatedAfterReset!"
+
+        r = api_client.delete(
+            f"{base_url}/api/passwords/{new_id}",
+            params={"master_password": NEW_PASSWORD},
+        )
+        assert r.status_code == 200
+        r = api_client.get(
+            f"{base_url}/api/passwords/{new_id}",
+            params={"master_password": NEW_PASSWORD},
+        )
+        assert r.status_code == 404
+
+        # ---- 11. Original 3 entries still untouched ----
+        r = api_client.get(
+            f"{base_url}/api/passwords", params={"master_password": NEW_PASSWORD}
+        )
+        assert r.status_code == 200
+        names = {e["account_name"] for e in r.json()}
+        assert names == {"TEST_Gmail", "TEST_Facebook", "TEST_Amazon"}
+
+        # ---- 12. Search still works after reset ----
+        r = api_client.post(
+            f"{base_url}/api/passwords/search",
+            json={"query": "Gmail", "master_password": NEW_PASSWORD},
+        )
+        assert r.status_code == 200
+        results = r.json()
+        assert len(results) == 1
+        assert results[0]["account_name"] == "TEST_Gmail"
+        assert results[0]["password"] == "GmailPlainPwd!42"
