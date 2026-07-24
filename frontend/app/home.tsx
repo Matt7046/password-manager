@@ -33,7 +33,9 @@ export default function HomeScreen() {
   // Reload passwords every time this screen gets focus (after add/edit/delete)
   useFocusEffect(
     useCallback(() => {
-      loadPasswords();
+      if (masterPassword) {
+        loadPasswords();
+      }
     }, [masterPassword])
   );
 
@@ -42,11 +44,20 @@ export default function HomeScreen() {
   }, [passwords, searchQuery, selectedCategory]);
 
   const loadPasswords = async () => {
+    if (!masterPassword) {
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
-      const data = await api.getAllPasswords(masterPassword!);
+      const data = await api.getAllPasswords(masterPassword);
       setPasswords(data);
     } catch (error) {
-      Alert.alert('Errore', 'Impossibile caricare le password');
+      // Silently ignore errors when user has logged out or master password is invalid
+      // (e.g. after logout, focus effect triggers before navigation completes)
+      if (masterPassword) {
+        Alert.alert('Errore', 'Impossibile caricare le password');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
