@@ -128,6 +128,23 @@ export default function LoginScreen() {
           >
             <Text style={styles.forgotText}>Password dimenticata?</Text>
           </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>oppure</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Create Account Button */}
+          <TouchableOpacity
+            testID="create-account-button"
+            style={styles.createAccountButton}
+            onPress={() => router.push('/setup')}
+          >
+            <Ionicons name="person-add" size={20} color="#4ecdc4" />
+            <Text style={styles.createAccountText}>Crea nuovo account</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -217,5 +234,37 @@ const styles = StyleSheet.create({
     color: '#4ecdc4',
     fontSize: 14,
     textDecorationLine: 'underline',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#0f3460',
+  },
+  dividerText: {
+    color: '#666',
+    fontSize: 13,
+    marginHorizontal: 12,
+  },
+  createAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: '#4ecdc4',
+    gap: 8,
+  },
+  createAccountText: {
+    color: '#4ecdc4',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
