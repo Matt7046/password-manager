@@ -110,6 +110,7 @@ class UserCreate(BaseModel):
     master_password: str
 
 class UserLogin(BaseModel):
+    email: EmailStr
     master_password: str
 
 class UserResponse(BaseModel):
@@ -183,13 +184,17 @@ async def setup_master_password(user: UserCreate):
 
 @api_router.post("/auth/login")
 async def login(credentials: UserLogin):
-    """Verify master password"""
+    """Verify email + master password"""
     user = await db.users.find_one({"user_id": "master_user"})
     if not user:
-        raise HTTPException(status_code=404, detail="Master password not set up")
+        raise HTTPException(status_code=404, detail="Nessun account registrato")
+    
+    # Verify email matches registered account
+    if user.get("email", "").lower() != credentials.email.lower():
+        raise HTTPException(status_code=401, detail="Email o password non validi")
     
     if not pwd_context.verify(credentials.master_password, user["master_password"]):
-        raise HTTPException(status_code=401, detail="Invalid master password")
+        raise HTTPException(status_code=401, detail="Email o password non validi")
     
     return {"success": True, "message": "Login successful"}
 

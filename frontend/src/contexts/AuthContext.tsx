@@ -10,7 +10,7 @@ interface AuthContextType {
   isCheckingSetup: boolean;
   isBiometricEnabled: boolean;
   userEmail: string;
-  login: (password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   setupMasterPassword: (email: string, password: string) => Promise<void>;
   checkSetup: () => Promise<void>;
@@ -77,10 +77,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (password: string) => {
+  const login = async (email: string, password: string) => {
     try {
-      await api.login(password);
+      await api.login(email, password);
       setMasterPassword(password);
+      setUserEmail(email);
       setIsAuthenticated(true);
     } catch (error) {
       throw error;
@@ -116,8 +117,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
     
-    if (hasHardware && isEnrolled && masterPassword) {
+    if (hasHardware && isEnrolled && masterPassword && userEmail) {
       await storage.secureSet('master_password', masterPassword);
+      await storage.secureSet('user_email', userEmail);
       await storage.setItem('biometric_enabled', 'true');
       setIsBiometricEnabled(true);
     } else {
@@ -133,22 +135,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (result.success) {
       const savedPassword = await storage.secureGet('master_password', null);
-      if (savedPassword) {
+      const savedEmail = await storage.secureGet('user_email', null);
+      if (savedPassword && savedEmail) {
         try {
-          await login(savedPassword);
+          await login(savedEmail, savedPassword);
         } catch (error) {
-          // Saved password is no longer valid (e.g. after password reset)
-          // Disable biometric authentication and clear stored password
+          // Saved credentials are no longer valid (e.g. after password reset)
           await storage.secureSet('master_password', '');
+          await storage.secureSet('user_email', '');
           await storage.setItem('biometric_enabled', 'false');
           setIsBiometricEnabled(false);
           throw new Error('La password è stata cambiata. Accedi con la nuova password master e ri-abilita la biometrica.');
         }
       } else {
-        // No saved password - disable biometric
         await storage.setItem('biometric_enabled', 'false');
         setIsBiometricEnabled(false);
-        throw new Error('Nessuna password salvata. Accedi con la password master.');
+        throw new Error('Nessuna credenziale salvata. Accedi con la password master.');
       }
     } else {
       throw new Error('Biometric authentication failed');

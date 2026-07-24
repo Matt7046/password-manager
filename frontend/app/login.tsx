@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 export default function LoginScreen() {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -36,17 +37,32 @@ export default function LoginScreen() {
     }
   };
 
+  const validateEmail = (email: string) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  };
+
   const handleLogin = async () => {
+    if (!email.trim()) {
+      Alert.alert('Errore', 'Inserisci il tuo indirizzo email');
+      return;
+    }
+
+    if (!validateEmail(email)) {
+      Alert.alert('Errore', 'Inserisci un indirizzo email valido');
+      return;
+    }
+
     if (!password) {
       Alert.alert('Errore', 'Inserisci la password master');
       return;
     }
 
     try {
-      await login(password);
+      await login(email.trim().toLowerCase(), password);
       router.replace('/home');
     } catch (error: any) {
-      Alert.alert('Errore', 'Password master non valida');
+      Alert.alert('Errore', 'Email o password non validi');
     }
   };
 
@@ -56,10 +72,8 @@ export default function LoginScreen() {
       router.replace('/home');
     } catch (error: any) {
       console.log('Biometric auth failed:', error);
-      // Show message if password was changed
       if (error.message && (error.message.includes('cambiata') || error.message.includes('salvata'))) {
         Alert.alert('Biometrica Disabilitata', error.message);
-        // Re-check biometric availability (will be false now)
         setBiometricAvailable(false);
       }
     }
@@ -77,7 +91,21 @@ export default function LoginScreen() {
           </View>
 
           <Text style={styles.title}>Password Manager</Text>
-          <Text style={styles.subtitle}>Inserisci la tua password master</Text>
+          <Text style={styles.subtitle}>Accedi al tuo account</Text>
+
+          <View style={styles.inputContainer}>
+            <Ionicons name="mail" size={20} color="#666" style={styles.inputIcon} />
+            <TextInput
+              testID="login-email-input"
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor="#666"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
 
           <View style={styles.inputContainer}>
             <Ionicons name="key" size={20} color="#666" style={styles.inputIcon} />
@@ -120,7 +148,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Forgot Password Link */}
           <TouchableOpacity
             testID="forgot-password-button"
             style={styles.forgotButton}
@@ -129,14 +156,12 @@ export default function LoginScreen() {
             <Text style={styles.forgotText}>Password dimenticata?</Text>
           </TouchableOpacity>
 
-          {/* Divider */}
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>oppure</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Create Account Button */}
           <TouchableOpacity
             testID="create-account-button"
             style={styles.createAccountButton}
