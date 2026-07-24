@@ -136,6 +136,14 @@ async def check_setup():
     user = await db.users.find_one()
     return {"is_setup": user is not None}
 
+@api_router.delete("/auth/reset")
+async def reset_all_data():
+    """Reset everything - delete master password and all password entries.
+    WARNING: This deletes ALL data. Used when user forgot master password."""
+    await db.users.delete_many({})
+    await db.password_entries.delete_many({})
+    return {"success": True, "message": "All data has been reset"}
+
 # ============ Password Entry Routes ============
 
 @api_router.post("/passwords", response_model=PasswordEntryResponse)

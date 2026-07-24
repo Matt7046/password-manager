@@ -46,6 +46,17 @@ export const api = {
     return response.json();
   },
 
+  resetAllData: async () => {
+    const response = await fetch(`${API_URL}/auth/reset`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || 'Reset failed');
+    }
+    return response.json();
+  },
+
   // Password entries endpoints
   getAllPasswords: async (masterPassword: string): Promise<PasswordEntry[]> => {
     const response = await fetch(`${API_URL}/passwords?master_password=${encodeURIComponent(masterPassword)}`);

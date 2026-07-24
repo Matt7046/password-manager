@@ -15,6 +15,7 @@ interface AuthContextType {
   checkSetup: () => Promise<void>;
   enableBiometric: () => Promise<void>;
   authenticateWithBiometric: () => Promise<void>;
+  resetAllData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -88,6 +89,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthenticated(false);
   };
 
+  const resetAllData = async () => {
+    try {
+      await api.resetAllData();
+      // Clear all local state
+      setMasterPassword(null);
+      setIsAuthenticated(false);
+      setIsSetup(false);
+      setIsBiometricEnabled(false);
+      // Clear secure storage
+      try {
+        await storage.setItem('biometric_enabled', 'false');
+        await storage.secureSet('master_password', '');
+      } catch (e) {
+        console.error('Error clearing storage:', e);
+      }
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const enableBiometric = async () => {
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
@@ -130,7 +151,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setupMasterPassword,
         checkSetup,
         enableBiometric,
-        authenticateWithBiometric
+        authenticateWithBiometric,
+        resetAllData
       }}
     >
       {children}

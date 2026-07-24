@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ScrollView,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
@@ -19,7 +20,9 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const { login, isBiometricEnabled, authenticateWithBiometric } = useAuth();
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const { login, isBiometricEnabled, authenticateWithBiometric, resetAllData } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -60,6 +63,21 @@ export default function LoginScreen() {
     }
   };
 
+  const handleReset = async () => {
+    setResetting(true);
+    try {
+      await resetAllData();
+      setShowResetModal(false);
+      setPassword('');
+      // Redirect to setup screen
+      router.replace('/setup');
+    } catch (error: any) {
+      Alert.alert('Errore', error.message || 'Reset fallito');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -77,6 +95,7 @@ export default function LoginScreen() {
           <View style={styles.inputContainer}>
             <Ionicons name="key" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
+              testID="master-password-input"
               style={styles.input}
               placeholder="Password Master"
               placeholderTextColor="#666"
@@ -95,12 +114,13 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.button} onPress={handleLogin}>
+          <TouchableOpacity testID="login-button" style={styles.button} onPress={handleLogin}>
             <Text style={styles.buttonText}>Accedi</Text>
           </TouchableOpacity>
 
           {biometricAvailable && (
             <TouchableOpacity
+              testID="biometric-login-button"
               style={styles.biometricButton}
               onPress={handleBiometricLogin}
             >
@@ -108,8 +128,60 @@ export default function LoginScreen() {
               <Text style={styles.biometricText}>Usa Biometrica</Text>
             </TouchableOpacity>
           )}
+
+          {/* Forgot Password / Reset */}
+          <TouchableOpacity
+            testID="forgot-password-button"
+            style={styles.forgotButton}
+            onPress={() => setShowResetModal(true)}
+          >
+            <Text style={styles.forgotText}>Password dimenticata? Reset</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Reset Confirmation Modal */}
+      <Modal
+        visible={showResetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowResetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.warningIcon}>
+              <Ionicons name="warning" size={48} color="#ff6b6b" />
+            </View>
+            <Text style={styles.modalTitle}>Attenzione!</Text>
+            <Text style={styles.modalText}>
+              Questa azione cancellerà{'\n'}
+              <Text style={styles.bold}>TUTTE le tue password</Text>{'\n'}
+              e la password master.{'\n\n'}
+              L'azione è irreversibile.
+            </Text>
+
+            <TouchableOpacity
+              testID="confirm-reset-button"
+              style={styles.dangerButton}
+              onPress={handleReset}
+              disabled={resetting}
+            >
+              <Text style={styles.dangerButtonText}>
+                {resetting ? 'Cancellazione...' : 'Sì, cancella tutto'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              testID="cancel-reset-button"
+              style={styles.cancelButton}
+              onPress={() => setShowResetModal(false)}
+              disabled={resetting}
+            >
+              <Text style={styles.cancelButtonText}>Annulla</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -187,5 +259,78 @@ const styles = StyleSheet.create({
     color: '#4ecdc4',
     fontSize: 16,
     marginLeft: 8,
+  },
+  forgotButton: {
+    alignItems: 'center',
+    marginTop: 24,
+    padding: 12,
+  },
+  forgotText: {
+    color: '#ff6b6b',
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#16213e',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: '#ff6b6b',
+  },
+  warningIcon: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ff6b6b',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  bold: {
+    fontWeight: 'bold',
+    color: '#ff6b6b',
+  },
+  dangerButton: {
+    backgroundColor: '#ff6b6b',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  dangerButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4ecdc4',
+  },
+  cancelButtonText: {
+    color: '#4ecdc4',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
