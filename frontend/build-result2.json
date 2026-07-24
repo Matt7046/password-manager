@@ -1,0 +1,47 @@
+﻿{
+    "id":  "8ccc395e-1540-437b-95fe-aea39b4f2d33",
+    "status":  "FINISHED",
+    "platform":  "ANDROID",
+    "artifacts":  {
+                      "buildUrl":  "https://expo.dev/artifacts/eas/3ElnXyvqyFVif3ADSlDD1bbqSX8yp6UNyhOhBuOfG4o.apk",
+                      "applicationArchiveUrl":  "https://expo.dev/artifacts/eas/3ElnXyvqyFVif3ADSlDD1bbqSX8yp6UNyhOhBuOfG4o.apk"
+                  },
+    "fingerprint":  {
+                        "id":  "019f943e-c067-7587-be58-d2e2ee7d4bff",
+                        "hash":  "b6d9d8bed27862fd1ce43841f642291624ae9ba9"
+                    },
+    "initiatingActor":  {
+                            "id":  "8a6eebc0-342f-40de-856a-dfe5c3fb70a2",
+                            "displayName":  "matt7046"
+                        },
+    "logFiles":  [
+                     "https://storage.googleapis.com/eas-workflows-production/logs/5796035b-08f4-4762-8f17-6b95efd2674c/8ccc395e-1540-437b-95fe-aea39b4f2d33/2026-07-24T13%3A33%3A33Z-d891c6c1-786b-43f7-a10c-70fa994cd74a.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256\u0026X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260724%2Fauto%2Fstorage%2Fgoog4_request\u0026X-Goog-Date=20260724T134817Z\u0026X-Goog-Expires=900\u0026X-Goog-SignedHeaders=host\u0026X-Goog-Signature=59eca6ffecfa3395ecde76df832444c1ea3f0ca804a03303bf617d136331a35932b34d446a245860f5b327af53a4d237496a8132ddd0bbbafcf76b304a20aac9d4fd53f91038e29a2c6ffabe49562f664e7b57c6f8eae3dc900cbc4b5b72a103665b66796df5678cc8072a810c3dd870576872c94933a8488d778378bf08000bb7d5a1188474cb18dc314d6a9f2c8a175b280785bd20cf7a596ca66568d9e7e8f5a04d1af90deb9b1449b54d33b30e87b2e22fdf8853eb263346d5e2bd1a31e83b49183959f81134666bb761a1ecbde9b45da1f6aed593702f5c826c5c63e26371afca10c812befd9b529ca9d06baf48cfeaedc0c90b68905eae64e4b10b3f19"
+                 ],
+    "project":  {
+                    "id":  "5796035b-08f4-4762-8f17-6b95efd2674c",
+                    "name":  "password-manager",
+                    "slug":  "password-manager",
+                    "ownerAccount":  {
+                                         "id":  "050aa1bb-3667-4df2-ad28-87aa00d9dac5",
+                                         "name":  "matt7046"
+                                     }
+                },
+    "distribution":  "INTERNAL",
+    "buildProfile":  "preview",
+    "sdkVersion":  "54.0.0",
+    "appVersion":  "1.0.0",
+    "appBuildVersion":  "1",
+    "gitCommitHash":  "54d23c966612456e1693ec5ec1fcdd15a0d3c37c",
+    "gitCommitMessage":  "fix delete password salvate",
+    "priority":  "NORMAL_PLUS",
+    "createdAt":  "2026-07-24T13:09:28.215Z",
+    "updatedAt":  "2026-07-24T13:52:08.987Z",
+    "completedAt":  "2026-07-24T13:52:08.878Z",
+    "expirationDate":  "2026-08-07T13:09:28.288Z",
+    "isForIosSimulator":  false,
+    "metrics":  {
+                    "buildWaitTime":  3917,
+                    "buildQueueTime":  1445942,
+                    "buildDuration":  1110804
+                }
+}

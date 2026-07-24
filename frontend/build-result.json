@@ -1,0 +1,48 @@
+﻿{
+  "id": "65add154-6693-4851-bfe8-209dc98783d3",
+  "status": "ERRORED",
+  "platform": "ANDROID",
+  "error": {
+    "errorCode": "UNKNOWN_ERROR",
+    "message": "Unknown error. See logs of the Install dependencies build phase for more information."
+  },
+  "artifacts": {},
+  "fingerprint": {
+    "id": "019f9427-8cb4-7aa2-9e38-9e102d97d30d",
+    "hash": "f5da898598262e8a82ed365532ffa6f12d528c67"
+  },
+  "initiatingActor": {
+    "id": "8a6eebc0-342f-40de-856a-dfe5c3fb70a2",
+    "displayName": "matt7046"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/5796035b-08f4-4762-8f17-6b95efd2674c/65add154-6693-4851-bfe8-209dc98783d3/2026-07-24T13%3A04%3A50Z-1f5d6ebb-81f2-42c9-ac8c-d13d8c5de66b.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260724%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260724T130530Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=a232a4bb55d58b1fff8df10d442a3f20789ddfb0c974d87f831aa3cc36f9d8301c3ecabffbc78fa610d36c79ce5b28d52cac17b5c39fb81a23439745b622b9dd5c26d750488132d826129cf4fdd717ef2690be13707d4a9c7c45e30a33ff0928e53bbe01edd56419968fecd3db9c6ad2c7690c91b96bce54e0472532cbf25f4f60c17444b503e2f4d8791232685f8beff9102616e42a2a044697beb9f0f6b63aef0b7a04a9e845cc6b2e78b4fbead32d882d0edfd37db818f174dd4958192b9c034e083040760a95c20cc3ad0be6f871c80b18b1be7111b5a992ad43c2188a8d6bd0fe8a8a6bfd7ffea924fba30be7587c19ca3489cd34114bc4fe42e630232b"
+  ],
+  "project": {
+    "id": "5796035b-08f4-4762-8f17-6b95efd2674c",
+    "name": "password-manager",
+    "slug": "password-manager",
+    "ownerAccount": {
+      "id": "050aa1bb-3667-4df2-ad28-87aa00d9dac5",
+      "name": "matt7046"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "preview",
+  "sdkVersion": "54.0.0",
+  "appVersion": "1.0.0",
+  "appBuildVersion": "1",
+  "gitCommitHash": "54d23c966612456e1693ec5ec1fcdd15a0d3c37c",
+  "gitCommitMessage": "fix delete password salvate",
+  "priority": "NORMAL_PLUS",
+  "createdAt": "2026-07-24T12:44:07.692Z",
+  "updatedAt": "2026-07-24T13:05:02.238Z",
+  "completedAt": "2026-07-24T13:05:01.953Z",
+  "expirationDate": "2026-08-07T12:44:07.724Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 4422,
+    "buildQueueTime": 1243119,
+    "buildDuration": 6720
+  }
+}
