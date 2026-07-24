@@ -210,6 +210,14 @@ async def forgot_password(request: ForgotPasswordRequest):
     otp_code = generate_otp()
     expires_at = datetime.utcnow() + timedelta(minutes=10)
     
+    # Send email FIRST - only save OTP if email was sent successfully
+    email_sent = send_otp_email(request.email, otp_code)
+    if not email_sent:
+        raise HTTPException(
+            status_code=500,
+            detail="Impossibile inviare email. Verifica che l'indirizzo sia corretto o riprova più tardi."
+        )
+    
     # Remove old OTPs for this email
     await db.otp_codes.delete_many({"email": request.email.lower()})
     
@@ -220,11 +228,6 @@ async def forgot_password(request: ForgotPasswordRequest):
         "created_at": datetime.utcnow(),
         "expires_at": expires_at
     })
-    
-    # Send email
-    email_sent = send_otp_email(request.email, otp_code)
-    if not email_sent:
-        raise HTTPException(status_code=500, detail="Impossibile inviare email. Riprova più tardi.")
     
     return {"success": True, "message": "Codice inviato via email"}
 
