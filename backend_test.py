@@ -4,7 +4,7 @@ import time
 from typing import Dict, Any, Optional
 
 # Backend URL from environment
-BACKEND_URL = "https://password-vault-167.preview.emergentagent.com/api"
+BACKEND_URL = "https://password.colorsdev.tech/api"
 MASTER_PASSWORD = "TestPass123!"
 
 # Test results tracking
