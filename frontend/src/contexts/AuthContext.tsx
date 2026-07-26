@@ -172,17 +172,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const enableBiometric = async () => {
+    if (!masterPassword || !userEmail) {
+      throw new Error('Accedi prima di abilitare la biometrica');
+    }
+
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    
-    if (hasHardware && isEnrolled && masterPassword && userEmail) {
+
+    if (hasHardware && isEnrolled) {
       await storage.secureSet('master_password', masterPassword);
       await storage.secureSet('user_email', userEmail);
       await storage.setItem('biometric_enabled', 'true');
       setIsBiometricEnabled(true);
-    } else {
-      throw new Error('Biometric authentication not available');
+      return;
     }
+
+    // PC / browser: Windows Hello / platform WebAuthn
+    const { isWebPlatformAuthAvailable, registerWebPlatformAuth } = await import(
+      '@/src/utils/webBiometric'
+    );
+    if (await isWebPlatformAuthAvailable()) {
+      await registerWebPlatformAuth(userEmail);
+      await storage.secureSet('master_password', masterPassword);
+      await storage.secureSet('user_email', userEmail);
+      await storage.setItem('biometric_enabled', 'true');
+      setIsBiometricEnabled(true);
+      return;
+    }
+
+    throw new Error(
+      'Biometrica non disponibile. Su PC serve Windows Hello (o Touch ID) nel browser.',
+    );
   };
 
   const disableBiometric = async () => {
@@ -190,35 +210,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await storage.secureSet('user_email', '');
     await storage.setItem('biometric_enabled', 'false');
     setIsBiometricEnabled(false);
+    try {
+      const { clearWebPlatformAuth } = await import('@/src/utils/webBiometric');
+      clearWebPlatformAuth();
+    } catch (_) {}
   };
 
   const authenticateWithBiometric = async () => {
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Authenticate to access your passwords',
-      fallbackLabel: 'Use Master Password'
-    });
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-    if (result.success) {
-      const savedPassword = await storage.secureGet('master_password', null);
-      const savedEmail = await storage.secureGet('user_email', null);
-      if (savedPassword && savedEmail) {
-        try {
-          await login(savedEmail, savedPassword);
-        } catch (error) {
-          // Saved credentials are no longer valid (e.g. after password reset)
-          await storage.secureSet('master_password', '');
-          await storage.secureSet('user_email', '');
-          await storage.setItem('biometric_enabled', 'false');
-          setIsBiometricEnabled(false);
-          throw new Error('La password è stata cambiata. Accedi con la nuova password master e ri-abilita la biometrica.');
-        }
-      } else {
+    let verified = false;
+
+    if (hasHardware && isEnrolled) {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Sblocca Password Manager',
+        fallbackLabel: 'Usa Password Master',
+      });
+      verified = result.success;
+    } else {
+      const { authenticateWebPlatformAuth } = await import('@/src/utils/webBiometric');
+      verified = await authenticateWebPlatformAuth();
+    }
+
+    if (!verified) {
+      throw new Error('Autenticazione biometrica fallita o annullata');
+    }
+
+    const savedPassword = await storage.secureGet('master_password', null);
+    const savedEmail = await storage.secureGet('user_email', null);
+    if (savedPassword && savedEmail) {
+      try {
+        await login(savedEmail, savedPassword);
+      } catch (error) {
+        await storage.secureSet('master_password', '');
+        await storage.secureSet('user_email', '');
         await storage.setItem('biometric_enabled', 'false');
         setIsBiometricEnabled(false);
-        throw new Error('Nessuna credenziale salvata. Accedi con la password master.');
+        try {
+          const { clearWebPlatformAuth } = await import('@/src/utils/webBiometric');
+          clearWebPlatformAuth();
+        } catch (_) {}
+        throw new Error(
+          'La password è stata cambiata. Accedi con la nuova password master e ri-abilita la biometrica.',
+        );
       }
     } else {
-      throw new Error('Biometric authentication failed');
+      await storage.setItem('biometric_enabled', 'false');
+      setIsBiometricEnabled(false);
+      throw new Error('Nessuna credenziale salvata. Accedi con la password master.');
     }
   };
 

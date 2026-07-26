@@ -1,0 +1,119 @@
+﻿===== 1. frontend/assets =====
+       93252  C:\Progetti\Password-Manager\frontend\assets\fonts\SpaceMono-Regular.ttf
+      318353  C:\Progetti\Password-Manager\frontend\assets\images\adaptive-icon.png
+      118129  C:\Progetti\Password-Manager\frontend\assets\images\app-image.png
+      255372  C:\Progetti\Password-Manager\frontend\assets\images\favicon.png
+      318353  C:\Progetti\Password-Manager\frontend\assets\images\icon.png
+        5075  C:\Progetti\Password-Manager\frontend\assets\images\partial-react-logo.png
+        6341  C:\Progetti\Password-Manager\frontend\assets\images\react-logo.png
+       14225  C:\Progetti\Password-Manager\frontend\assets\images\react-logo@2x.png
+       21252  C:\Progetti\Password-Manager\frontend\assets\images\react-logo@3x.png
+      118129  C:\Progetti\Password-Manager\frontend\assets\images\splash-image.png
+Directories: 2
+Files: 10
+Total bytes: 1268481
+
+===== 2. docker-compose.prod.yml frontend-1 =====
+--- match at line 4 ---
+   1|version: '3.8'
+   2|
+   3|services:
+   4|  frontend-1:
+   5|    image: docker.io/matt7046/frontend:1.0.1
+   6|    build:
+   7|      context: ../frontend
+   8|      dockerfile: Dockerfile
+   9|      args:
+  10|        FRONTEND_USE_LOCAL_ENV: "0"
+  11|    # In produzione Next.js gira sulla 3000
+  12|    expose:
+  13|      - "3000"
+  14|    env_file:
+  15|      - .env
+  16|    networks:
+  17|      app-network:
+  18|        aliases:
+  19|          - frontend
+  20|    restart: always
+  21|
+  22|  frontend-2:
+  23|    image: docker.io/matt7046/frontend:1.0.1
+  24|    expose:
+  25|      - "3000"
+  26|    env_file:
+  27|      - .env
+  28|    networks:
+  29|      app-network:
+  30|        aliases:
+  31|          - frontend
+  32|    restart: always
+  33|
+  34|  rabbitmq:
+  35|    image: rabbitmq:3-management
+  36|    container_name: rabbitmq
+  37|    # Nessuna ports: â€” AMQP e management solo sulla rete Docker (non esposti su Internet).
+  38|    # Opzionale sulla macchina host: "127.0.0.1:15672:15672" per la UI via SSH tunnel.
+  39|    env_file:
+--- match at line 85 ---
+  80|      - /var/lib/letsencrypt:/var/lib/letsencrypt:ro
+  81|    ports:
+  82|      - "80:80"
+  83|      - "443:443"
+  84|    depends_on:
+  85|      - frontend-1
+  86|      - frontend-2
+  87|      - image-service-1
+  88|      - image-service-2
+  89|      - user-point-service-1
+  90|      - user-point-service-2
+  91|      - activity-service-1
+  92|      - activity-service-2
+  93|      - auth-service-1
+  94|      - auth-service-2
+  95|      - notification-service-1
+  96|      - notification-service-2
+  97|    networks:
+  98|      - app-network
+  99|
+ 100|  # --- MICROSERVIZI ---
+ 101|  user-point-service-1:
+ 102|    depends_on:
+ 103|      elasticsearch:
+ 104|        condition: service_healthy
+ 105|      rabbitmq:
+ 106|        condition: service_started
+ 107|    image: docker.io/matt7046/user-point-service:1.0.0
+ 108|    build:
+ 109|      context: ./
+ 110|      dockerfile: service/userPoint/Dockerfile
+ 111|    volumes:
+ 112|      - ./service/userPoint/src/main/resources/certificate:/app/certificate
+ 113|      - ./elasticsearch/certs:/app/elasticsearch/certs:ro
+ 114|    env_file:
+ 115|      - .env
+ 116|    networks:
+ 117|      app-network:
+ 118|        aliases:
+ 119|          - user-point-service
+ 120|
+
+===== 3. git =====
+## production...origin/production
+ M frontend/scripts/generate-pwa-assets.mjs
+
+  main       e3997db [origin/main] modifica icona
+* production ad54bc0 [origin/production] Merge branch 'main' into production
+
+ad54bc0 Merge branch 'main' into production
+e3997db modifica icona
+d5a4ac8 Merge branch 'main' into production
+
+
+===== 4. rg =====
+
+
+===== 5. Password-Manager backend bat =====
+         126  -a----  C:\Progetti\Password-Manager\backend\bat\BUILD-AND-PUSH.BAT
+         250  -a----  C:\Progetti\Password-Manager\backend\bat\BUILD.BAT
+         442  -a----  C:\Progetti\Password-Manager\backend\bat\PUSH.BAT
+

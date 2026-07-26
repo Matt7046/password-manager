@@ -8,7 +8,11 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "pwa:assets": "node ./scripts/generate-pwa-assets.mjs",
+    "preexport": "node ./scripts/generate-pwa-assets.mjs",
+    "postexport": "node ./scripts/patch-web-html.mjs",
+    "export:web": "expo export --platform web && node ./scripts/patch-web-html.mjs"
   },
   "dependencies": {
     "@expo/metro-runtime": "6.1.2",
@@ -50,6 +54,7 @@
     "eslint": "9.25.0",
     "eslint-config-expo": "10.0.0",
     "expo-doctor": "1.19.8",
+    "sharp": "0.34.2",
     "typescript": "5.9.3"
   },
   "resolutions": {

@@ -1,0 +1,8 @@
+OK login
+OK setup
+OK forgot-password
+OK home
+OK add-password
+OK edit-password
+OK password-detail
+EXIT_CODE=0 
