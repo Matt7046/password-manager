@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,33 +20,76 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const { login, isBiometricEnabled, authenticateWithBiometric, userEmail } = useAuth();
+  const {
+    login,
+    isBiometricEnabled,
+    authenticateWithBiometric,
+    userEmail,
+    isCheckingSetup,
+    isAuthenticated,
+  } = useAuth();
   const router = useRouter();
+  // Prevents auto-prompt from firing twice (userEmail updates, Strict Mode, remount races).
+  const autoBiometricAttempted = useRef(false);
+  const biometricInProgress = useRef(false);
+
+  const handleBiometricLogin = useCallback(async () => {
+    if (biometricInProgress.current || isAuthenticated) return;
+    biometricInProgress.current = true;
+    try {
+      await authenticateWithBiometric();
+      router.replace('/home');
+    } catch (error: any) {
+      console.log('Biometric auth failed:', error);
+      if (error.message && (error.message.includes('cambiata') || error.message.includes('salvata'))) {
+        showAlert('Biometrica Disabilitata', error.message);
+        setBiometricAvailable(false);
+      }
+    } finally {
+      biometricInProgress.current = false;
+    }
+  }, [authenticateWithBiometric, isAuthenticated, router]);
+
+  const handleBiometricLoginRef = useRef(handleBiometricLogin);
+  handleBiometricLoginRef.current = handleBiometricLogin;
 
   useEffect(() => {
-    checkBiometric();
     if (userEmail) {
       setEmail(userEmail);
     }
   }, [userEmail]);
 
-  const checkBiometric = async () => {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    let webOk = false;
-    if (Platform.OS === 'web') {
-      try {
-        const { isWebPlatformAuthAvailable } = await import('@/src/utils/webBiometric');
-        webOk = await isWebPlatformAuthAvailable();
-      } catch (_) {}
-    }
-    const canUse = ((hasHardware && isEnrolled) || webOk) && isBiometricEnabled;
-    setBiometricAvailable(canUse);
+  useEffect(() => {
+    if (isCheckingSetup || isAuthenticated) return;
 
-    if (canUse) {
-      handleBiometricLogin();
-    }
-  };
+    let cancelled = false;
+
+    const checkBiometric = async () => {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      let webOk = false;
+      if (Platform.OS === 'web') {
+        try {
+          const { isWebPlatformAuthAvailable } = await import('@/src/utils/webBiometric');
+          webOk = await isWebPlatformAuthAvailable();
+        } catch (_) {}
+      }
+      if (cancelled) return;
+
+      const canUse = ((hasHardware && isEnrolled) || webOk) && isBiometricEnabled;
+      setBiometricAvailable(canUse);
+
+      if (canUse && !autoBiometricAttempted.current) {
+        autoBiometricAttempted.current = true;
+        await handleBiometricLoginRef.current();
+      }
+    };
+
+    void checkBiometric();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCheckingSetup, isBiometricEnabled, isAuthenticated]);
 
   const validateEmail = (value: string) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -74,19 +117,6 @@ export default function Login() {
       router.replace('/home');
     } catch (error: any) {
       showAlert('Errore', error?.message || 'Email o password non validi');
-    }
-  };
-
-  const handleBiometricLogin = async () => {
-    try {
-      await authenticateWithBiometric();
-      router.replace('/home');
-    } catch (error: any) {
-      console.log('Biometric auth failed:', error);
-      if (error.message && (error.message.includes('cambiata') || error.message.includes('salvata'))) {
-        showAlert('Biometrica Disabilitata', error.message);
-        setBiometricAvailable(false);
-      }
     }
   };
 

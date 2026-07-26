@@ -228,6 +228,27 @@ const main = async () => {
   await resizeContainedSquare(128).toFile(path.join(publicDir, "favicon.png"));
   await resizeContainedSquare(180).toFile(path.join(publicDir, "apple-touch-icon.png"));
 
+  // Edge/Chrome richiedono /favicon.ico reale (non PNG rinominato)
+  const { default: pngToIco } = await import("png-to-ico");
+  const icoPng32 = await sharp(appLogoPath)
+    .ensureAlpha()
+    .resize(32, 32, {
+      fit: "contain",
+      background: { r: 26, g: 26, b: 46, alpha: 1 },
+    })
+    .png()
+    .toBuffer();
+  const icoPng16 = await sharp(appLogoPath)
+    .ensureAlpha()
+    .resize(16, 16, {
+      fit: "contain",
+      background: { r: 26, g: 26, b: 46, alpha: 1 },
+    })
+    .png()
+    .toBuffer();
+  const icoBuf = await pngToIco([icoPng16, icoPng32]);
+  await fs.writeFile(path.join(publicDir, "favicon.ico"), icoBuf);
+
   await screenshot("screenshot-wide.png", 1280, 720);
   await screenshot("screenshot-narrow.png", 390, 844);
 

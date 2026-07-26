@@ -2,11 +2,12 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { LogBox } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AuthProvider } from "@/src/contexts/AuthContext";
 import { useIconFonts } from "@/src/hooks/use-icon-fonts";
 import { ServiceWorkerRegistration } from "@/src/components/ServiceWorkerRegistration";
 
-LogBox.ignoreAllLogs(true)
+LogBox.ignoreAllLogs(true);
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,9 +23,11 @@ export default function RootLayout() {
   if (!loaded && !error) return null;
 
   return (
-    <AuthProvider>
-      <ServiceWorkerRegistration />
-      <Stack screenOptions={{ headerShown: false }} />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <ServiceWorkerRegistration />
+        <Stack screenOptions={{ headerShown: false }} />
+      </AuthProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -194,8 +194,15 @@ class PasswordEntryResponse(BaseModel):
     notes: str
     category: str
     tags: List[str]
+    sort_order: int = 0
     created_at: datetime
     updated_at: datetime
+
+class ReorderPasswordsRequest(BaseModel):
+    email: EmailStr
+    master_password: str
+    ordered_ids: List[str]
+
 
 class SearchRequest(BaseModel):
     query: str
@@ -230,6 +237,32 @@ async def authenticate_user(email: str, master_password: str):
     return user
 
 
+def entry_to_response(entry: dict, owner: str, decrypted_password: str) -> PasswordEntryResponse:
+    return PasswordEntryResponse(
+        id=str(entry["_id"]),
+        account_name=entry["account_name"],
+        username=entry["username"],
+        password=decrypted_password,
+        url=entry.get("url") or "",
+        notes=entry.get("notes") or "",
+        category=entry.get("category") or "Altro",
+        tags=entry.get("tags") or [],
+        sort_order=int(entry.get("sort_order") or 0),
+        created_at=entry["created_at"],
+        updated_at=entry["updated_at"],
+    )
+
+
+async def next_sort_order(owner: str) -> int:
+    last = await db.password_entries.find_one(
+        {"owner_email": owner},
+        sort=[("sort_order", -1)],
+    )
+    if not last:
+        return 0
+    return int(last.get("sort_order") or 0) + 1
+
+
 # ============ Auth Routes ============
 
 @api_router.post("/auth/setup", response_model=UserResponse)
@@ -262,13 +295,16 @@ async def login(credentials: UserLogin):
 
 @api_router.get("/auth/check")
 async def check_setup(email: Optional[str] = None):
-    """Check if any account exists, or if a specific email is registered."""
+    """Check if any account exists, or if a specific email is registered.
+
+    Without email: never return another user's address (multi-user; no login prefill).
+    """
     await migrate_legacy_users()
     if email:
         user = await db.users.find_one({"email": email.lower()})
         return {"is_setup": user is not None, "email": email.lower() if user else ""}
     user = await db.users.find_one()
-    return {"is_setup": user is not None, "email": user.get("email", "") if user else ""}
+    return {"is_setup": user is not None, "email": ""}
 
 
 @api_router.post("/auth/forgot-password")
@@ -345,6 +381,7 @@ async def create_password_entry(entry: PasswordEntryCreate):
     email = user["email"].lower()
 
     encrypted_password = encrypt_password(entry.password, email)
+    sort_order = await next_sort_order(email)
 
     entry_doc = {
         "owner_email": email,
@@ -355,37 +392,64 @@ async def create_password_entry(entry: PasswordEntryCreate):
         "notes": entry.notes or "",
         "category": entry.category,
         "tags": entry.tags,
+        "sort_order": sort_order,
         "created_at": datetime.utcnow(),
         "updated_at": datetime.utcnow(),
     }
 
     result = await db.password_entries.insert_one(entry_doc)
-    entry_doc["id"] = str(result.inserted_id)
-    entry_doc["password"] = entry.password
-
-    return PasswordEntryResponse(**entry_doc)
+    entry_doc["_id"] = result.inserted_id
+    return entry_to_response(entry_doc, email, entry.password)
 
 
 @api_router.get("/passwords", response_model=List[PasswordEntryResponse])
 async def get_all_passwords(master_password: str, email: EmailStr):
-    """Get all password entries for this user"""
+    """Get all password entries for this user (ordered by sort_order)."""
     user = await authenticate_user(email, master_password)
     owner = user["email"].lower()
 
-    entries = await db.password_entries.find({"owner_email": owner}).to_list(1000)
+    entries = await db.password_entries.find({"owner_email": owner}).sort(
+        [("sort_order", 1), ("created_at", 1)]
+    ).to_list(1000)
     result = []
 
     for entry in entries:
         try:
             decrypted_password = decrypt_password(entry["password"], owner)
-            entry["id"] = str(entry["_id"])
-            entry["password"] = decrypted_password
-            result.append(PasswordEntryResponse(**entry))
+            result.append(entry_to_response(entry, owner, decrypted_password))
         except Exception as e:
             logging.error(f"Error decrypting password: {e}")
             continue
 
     return result
+
+
+@api_router.put("/passwords/reorder")
+async def reorder_passwords(body: ReorderPasswordsRequest):
+    """Persist custom order of password entries for this user."""
+    user = await authenticate_user(body.email, body.master_password)
+    owner = user["email"].lower()
+
+    if not body.ordered_ids:
+        raise HTTPException(status_code=400, detail="ordered_ids vuoto")
+
+    owned = await db.password_entries.find(
+        {"owner_email": owner},
+        {"_id": 1},
+    ).to_list(1000)
+    owned_ids = {str(doc["_id"]) for doc in owned}
+
+    for entry_id in body.ordered_ids:
+        if entry_id not in owned_ids:
+            raise HTTPException(status_code=400, detail=f"Entry non valida: {entry_id}")
+
+    for index, entry_id in enumerate(body.ordered_ids):
+        await db.password_entries.update_one(
+            {"_id": ObjectId(entry_id), "owner_email": owner},
+            {"$set": {"sort_order": index, "updated_at": datetime.utcnow()}},
+        )
+
+    return {"success": True, "count": len(body.ordered_ids)}
 
 
 @api_router.get("/passwords/{entry_id}", response_model=PasswordEntryResponse)
@@ -403,10 +467,7 @@ async def get_password_entry(entry_id: str, master_password: str, email: EmailSt
         raise HTTPException(status_code=404, detail="Password entry not found")
 
     decrypted_password = decrypt_password(entry["password"], owner)
-    entry["id"] = str(entry["_id"])
-    entry["password"] = decrypted_password
-
-    return PasswordEntryResponse(**entry)
+    return entry_to_response(entry, owner, decrypted_password)
 
 
 @api_router.put("/passwords/{entry_id}", response_model=PasswordEntryResponse)
@@ -448,10 +509,7 @@ async def update_password_entry(entry_id: str, update: PasswordEntryUpdate):
 
     updated_entry = await db.password_entries.find_one({"_id": ObjectId(entry_id)})
     decrypted_password = decrypt_password(updated_entry["password"], owner)
-    updated_entry["id"] = str(updated_entry["_id"])
-    updated_entry["password"] = decrypted_password
-
-    return PasswordEntryResponse(**updated_entry)
+    return entry_to_response(updated_entry, owner, decrypted_password)
 
 
 @api_router.delete("/passwords/{entry_id}")
@@ -486,9 +544,7 @@ async def search_passwords(search: SearchRequest):
     for entry in entries:
         try:
             decrypted_password = decrypt_password(entry["password"], owner)
-            entry["id"] = str(entry["_id"])
-            entry["password"] = decrypted_password
-            result.append(PasswordEntryResponse(**entry))
+            result.append(entry_to_response(entry, owner, decrypted_password))
         except Exception as e:
             logging.error(f"Error decrypting password: {e}")
             continue

@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 export const styles = StyleSheet.create({
   container: {
@@ -77,9 +77,65 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#0f3460',
   },
+  passwordCardActive: {
+    opacity: 0.95,
+    borderColor: '#4ecdc4',
+  },
+  passwordCardReorder: Platform.select({
+    web: {
+      userSelect: 'none',
+      // @ts-expect-error web CSS
+      WebkitUserSelect: 'none',
+      WebkitTouchCallout: 'none',
+    },
+    default: {},
+  }),
+  dragHandle: {
+    paddingRight: 12,
+    paddingVertical: 12,
+    paddingLeft: 4,
+    justifyContent: 'center',
+    minWidth: 44,
+    minHeight: 44,
+  },
+  cardMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    ...Platform.select({
+      web: {
+        // @ts-expect-error web CSS
+        touchAction: 'pan-y',
+      },
+      default: {},
+    }),
+  },
+  reorderActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  reorderBtn: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#0f3460',
+  },
+  reorderBtnDisabled: {
+    opacity: 0.35,
+  },
+  categorySelectorDisabled: {
+    opacity: 0.5,
+  },
+  reorderHint: {
+    color: '#999',
+    fontSize: 12,
+    marginHorizontal: 24,
+    marginBottom: 8,
+  },
   cardHeader: {
     flexDirection: 'row',
     marginBottom: 12,
+    alignItems: 'flex-start',
   },
   iconCircle: {
     width: 48,

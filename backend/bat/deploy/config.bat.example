@@ -1,0 +1,22 @@
+@echo off
+rem Copia come config.bat e adatta se serve.
+rem config.bat e' gitignore-ato (niente password/path segreti nel repo).
+
+set "DEPLOY_HOST=173.212.220.20"
+set "DEPLOY_USER=root"
+rem Cartella compose API sul VPS
+set "DEPLOY_API_PATH=/root/password-manager/backend"
+set "DEPLOY_COMPOSE_FILE=docker-compose.yml"
+rem Rete Docker condivisa con Activity Manager (come in produzione)
+set "DEPLOY_COMPOSE_NETWORK=backend_app-network"
+rem Web statico montato da nginx AM
+set "DEPLOY_WEB_PATH=/root/password-manager/web"
+rem Container nginx di AM (reload dopo upload web)
+set "DEPLOY_NGINX_CONTAINER=nginx"
+
+set "DEPLOY_HUB_IMAGE=docker.io/matt7046/password-manager:1.0.0"
+
+rem Opzionale: chiave SSH
+rem set "DEPLOY_SSH_KEY=%USERPROFILE%\.ssh\id_rsa"
+
+rem Skip: set DEPLOY_SKIP_BUILD=1 / DEPLOY_SKIP_PUSH=1 / DEPLOY_SKIP_SERVER=1 / DEPLOY_SKIP_EXPORT=1 / DEPLOY_SKIP_UPLOAD=1

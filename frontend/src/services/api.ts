@@ -9,6 +9,7 @@ export interface PasswordEntry {
   notes: string;
   category: string;
   tags: string[];
+  sort_order?: number;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +132,24 @@ export const api = {
       { method: 'DELETE' },
     );
     if (!response.ok) await parseError(response, 'Failed to delete password');
+    return response.json();
+  },
+
+  reorderPasswords: async (
+    email: string,
+    masterPassword: string,
+    orderedIds: string[],
+  ) => {
+    const response = await fetch(`${API_URL}/passwords/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        master_password: masterPassword,
+        ordered_ids: orderedIds,
+      }),
+    });
+    if (!response.ok) await parseError(response, 'Failed to reorder passwords');
     return response.json();
   },
 

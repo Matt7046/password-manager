@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { storage } from '@/src/utils/storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { api } from '../services/api';
@@ -29,6 +29,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [isBiometricEnabled, setIsBiometricEnabled] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const biometricAuthInFlight = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     initializeAuth();
@@ -84,18 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const result = await api.checkSetup();
         setIsSetup(result.is_setup);
-        // Multi-user: do not overwrite the logged-in email with "first user" from API
-        try {
-          const saved =
-            typeof sessionStorage !== 'undefined'
-              ? sessionStorage.getItem('pm_user_email')
-              : null;
-          if (!saved && result.email) {
-            setUserEmail(result.email);
-          }
-        } catch (_) {
-          if (result.email) setUserEmail(result.email);
-        }
+        // Do not prefill from API (checkSetup returns no email for multi-user).
+        // Login prefill comes only from sessionStorage / previous login on this device.
         return;
       } catch (error) {
         lastError = error;
@@ -217,48 +208,64 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const authenticateWithBiometric = async () => {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-
-    let verified = false;
-
-    if (hasHardware && isEnrolled) {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Sblocca Password Manager',
-        fallbackLabel: 'Usa Password Master',
-      });
-      verified = result.success;
-    } else {
-      const { authenticateWebPlatformAuth } = await import('@/src/utils/webBiometric');
-      verified = await authenticateWebPlatformAuth();
+    // Dedupe concurrent prompts (e.g. Strict Mode / overlapping Login effects).
+    if (biometricAuthInFlight.current) {
+      return biometricAuthInFlight.current;
     }
 
-    if (!verified) {
-      throw new Error('Autenticazione biometrica fallita o annullata');
-    }
+    const authPromise = (async () => {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
-    const savedPassword = await storage.secureGet('master_password', null);
-    const savedEmail = await storage.secureGet('user_email', null);
-    if (savedPassword && savedEmail) {
-      try {
-        await login(savedEmail, savedPassword);
-      } catch (error) {
-        await storage.secureSet('master_password', '');
-        await storage.secureSet('user_email', '');
+      let verified = false;
+
+      if (hasHardware && isEnrolled) {
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'Sblocca Password Manager',
+          fallbackLabel: 'Usa Password Master',
+        });
+        verified = result.success;
+      } else {
+        const { authenticateWebPlatformAuth } = await import('@/src/utils/webBiometric');
+        verified = await authenticateWebPlatformAuth();
+      }
+
+      if (!verified) {
+        throw new Error('Autenticazione biometrica fallita o annullata');
+      }
+
+      const savedPassword = await storage.secureGet('master_password', null);
+      const savedEmail = await storage.secureGet('user_email', null);
+      if (savedPassword && savedEmail) {
+        try {
+          await login(savedEmail, savedPassword);
+        } catch (error) {
+          await storage.secureSet('master_password', '');
+          await storage.secureSet('user_email', '');
+          await storage.setItem('biometric_enabled', 'false');
+          setIsBiometricEnabled(false);
+          try {
+            const { clearWebPlatformAuth } = await import('@/src/utils/webBiometric');
+            clearWebPlatformAuth();
+          } catch (_) {}
+          throw new Error(
+            'La password è stata cambiata. Accedi con la nuova password master e ri-abilita la biometrica.',
+          );
+        }
+      } else {
         await storage.setItem('biometric_enabled', 'false');
         setIsBiometricEnabled(false);
-        try {
-          const { clearWebPlatformAuth } = await import('@/src/utils/webBiometric');
-          clearWebPlatformAuth();
-        } catch (_) {}
-        throw new Error(
-          'La password è stata cambiata. Accedi con la nuova password master e ri-abilita la biometrica.',
-        );
+        throw new Error('Nessuna credenziale salvata. Accedi con la password master.');
       }
-    } else {
-      await storage.setItem('biometric_enabled', 'false');
-      setIsBiometricEnabled(false);
-      throw new Error('Nessuna credenziale salvata. Accedi con la password master.');
+    })();
+
+    biometricAuthInFlight.current = authPromise;
+    try {
+      await authPromise;
+    } finally {
+      if (biometricAuthInFlight.current === authPromise) {
+        biometricAuthInFlight.current = null;
+      }
     }
   };
 

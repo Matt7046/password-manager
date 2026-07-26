@@ -2,19 +2,25 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
-  TouchableOpacity,
+  TouchableOpacity as RNTouchableOpacity,
   TextInput,
   ActivityIndicator,
   RefreshControl,
   Modal,
+  Platform,
 } from 'react-native';
+import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { api, PasswordEntry } from '@/src/services/api';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { showAlert, showConfirm } from '@/src/utils/alert';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
+import WebSortableList, { WebDragHandleProps } from './WebSortableList';
 import { styles } from './Home.styles';
 
 export default function Home() {
@@ -25,12 +31,17 @@ export default function Home() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('Tutti');
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [reordering, setReordering] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const { masterPassword, userEmail, logout, isBiometricEnabled, enableBiometric, disableBiometric } = useAuth();
   const router = useRouter();
 
   const categories = ['Tutti', 'Social Media', 'Email', 'Banca', 'Acquisti', 'Lavoro', 'Intrattenimento', 'Videogiochi', 'Viaggi', 'Istruzione', 'Salute', 'Altro'];
+  const listClean = selectedCategory === 'Tutti' && !searchQuery.trim();
+  const canReorder = listClean && reorderMode && !reordering;
+  const isWeb = Platform.OS === 'web';
 
-  // Reload passwords every time this screen gets focus (after add/edit/delete)
   useFocusEffect(
     useCallback(() => {
       if (masterPassword && userEmail) {
@@ -42,6 +53,12 @@ export default function Home() {
   useEffect(() => {
     filterPasswords();
   }, [passwords, searchQuery, selectedCategory]);
+
+  useEffect(() => {
+    if (!listClean && reorderMode) {
+      setReorderMode(false);
+    }
+  }, [listClean, reorderMode]);
 
   const loadPasswords = async () => {
     if (!masterPassword || !userEmail) {
@@ -77,6 +94,36 @@ export default function Home() {
     }
 
     setFilteredPasswords(filtered);
+  };
+
+  const persistOrder = async (ordered: PasswordEntry[]) => {
+    if (!userEmail || !masterPassword) return;
+    setReordering(true);
+    setPasswords(ordered);
+    setFilteredPasswords(ordered);
+    try {
+      await api.reorderPasswords(
+        userEmail,
+        masterPassword,
+        ordered.map((p) => p.id),
+      );
+    } catch (error: any) {
+      showAlert('Errore', error.message || 'Impossibile salvare l\'ordine');
+      await loadPasswords();
+    } finally {
+      setReordering(false);
+    }
+  };
+
+  const moveItem = (id: string, direction: -1 | 1) => {
+    if (!canReorder) return;
+    const idx = filteredPasswords.findIndex((p) => p.id === id);
+    const nextIdx = idx + direction;
+    if (idx < 0 || nextIdx < 0 || nextIdx >= filteredPasswords.length) return;
+    const next = [...filteredPasswords];
+    const [item] = next.splice(idx, 1);
+    next.splice(nextIdx, 0, item);
+    void persistOrder(next);
   };
 
   const handleCopyPassword = async (password: string, accountName: string) => {
@@ -157,12 +204,17 @@ export default function Home() {
     return icons[category] || 'key';
   };
 
-  const renderPasswordItem = ({ item }: { item: PasswordEntry }) => (
-    <TouchableOpacity
-      style={styles.passwordCard}
-      onPress={() => router.push(`/password-detail?id=${item.id}`)}
-    >
-      <View style={styles.cardHeader}>
+  const renderCardBody = (
+    item: PasswordEntry,
+    index: number,
+    isActive: boolean,
+    drag?: () => void,
+    DragHandle?: React.ComponentType<WebDragHandleProps>,
+  ) => {
+    const HandleWrap = DragHandle;
+    const handleIcon = <Ionicons name="menu" size={26} color="#4ecdc4" />;
+    const cardMainContent = (
+      <>
         <View style={styles.iconCircle}>
           <Ionicons name={getCategoryIcon(item.category)} size={24} color="#4ecdc4" />
         </View>
@@ -171,33 +223,138 @@ export default function Home() {
           <Text style={styles.username}>{item.username}</Text>
           <View style={styles.tagContainer}>
             <Text style={styles.categoryBadge}>{item.category}</Text>
-            {item.tags.map((tag, index) => (
-              <Text key={index} style={styles.tag}>#{tag}</Text>
+            {item.tags.map((tag, tagIndex) => (
+              <Text key={tagIndex} style={styles.tag}>#{tag}</Text>
             ))}
           </View>
         </View>
+      </>
+    );
+
+    return (
+      <View
+        style={[
+          styles.passwordCard,
+          isActive && styles.passwordCardActive,
+          canReorder && styles.passwordCardReorder,
+        ]}
+      >
+        <View style={styles.cardHeader}>
+          {canReorder ? (
+            HandleWrap ? (
+              <HandleWrap style={styles.dragHandle}>{handleIcon}</HandleWrap>
+            ) : (
+              <TouchableOpacity
+                style={styles.dragHandle}
+                onLongPress={drag}
+                delayLongPress={250}
+                disabled={isActive}
+                accessibilityLabel="Tieni premuto e trascina per riordinare"
+              >
+                {handleIcon}
+              </TouchableOpacity>
+            )
+          ) : null}
+
+          {canReorder && HandleWrap ? (
+            <HandleWrap style={styles.cardMain} captureTouch={false}>
+              {cardMainContent}
+            </HandleWrap>
+          ) : (
+            <RNTouchableOpacity
+              style={styles.cardMain}
+              onPress={() => {
+                if (canReorder) return;
+                router.push(`/password-detail?id=${item.id}`);
+              }}
+              onLongPress={canReorder ? drag : undefined}
+              delayLongPress={250}
+              activeOpacity={0.85}
+              disabled={isActive}
+            >
+              {cardMainContent}
+            </RNTouchableOpacity>
+          )}
+        </View>
+
+        {canReorder ? (
+          <View style={styles.reorderActions}>
+            <RNTouchableOpacity
+              style={[styles.reorderBtn, index === 0 && styles.reorderBtnDisabled]}
+              disabled={index === 0 || reordering}
+              onPress={() => moveItem(item.id, -1)}
+              accessibilityLabel="Sposta su"
+            >
+              <Ionicons name="chevron-up" size={22} color={index === 0 ? '#444' : '#4ecdc4'} />
+            </RNTouchableOpacity>
+            <RNTouchableOpacity
+              style={[
+                styles.reorderBtn,
+                index >= filteredPasswords.length - 1 && styles.reorderBtnDisabled,
+              ]}
+              disabled={index >= filteredPasswords.length - 1 || reordering}
+              onPress={() => moveItem(item.id, 1)}
+              accessibilityLabel="Sposta giu"
+            >
+              <Ionicons
+                name="chevron-down"
+                size={22}
+                color={index >= filteredPasswords.length - 1 ? '#444' : '#4ecdc4'}
+              />
+            </RNTouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.cardActions}>
+            <RNTouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleCopyPassword(item.password, item.account_name)}
+            >
+              <Ionicons name="copy" size={20} color="#4ecdc4" />
+            </RNTouchableOpacity>
+            <RNTouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push(`/edit-password?id=${item.id}`)}
+            >
+              <Ionicons name="create" size={20} color="#ffa500" />
+            </RNTouchableOpacity>
+            <RNTouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleDeletePassword(item.id, item.account_name)}
+            >
+              <Ionicons name="trash" size={20} color="#ff6b6b" />
+            </RNTouchableOpacity>
+          </View>
+        )}
       </View>
-      <View style={styles.cardActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleCopyPassword(item.password, item.account_name)}
-        >
-          <Ionicons name="copy" size={20} color="#4ecdc4" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => router.push(`/edit-password?id=${item.id}`)}
-        >
-          <Ionicons name="create" size={20} color="#ffa500" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleDeletePassword(item.id, item.account_name)}
-        >
-          <Ionicons name="trash" size={20} color="#ff6b6b" />
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
+    );
+  };
+
+  const renderNativeItem = ({ item, drag, isActive, getIndex }: RenderItemParams<PasswordEntry>) => {
+    const index = getIndex?.() ?? 0;
+    return (
+      <ScaleDecorator activeScale={1.03}>
+        {renderCardBody(item, index, isActive, drag)}
+      </ScaleDecorator>
+    );
+  };
+
+  const listRefreshControl = reorderMode ? undefined : (
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={() => {
+        setRefreshing(true);
+        loadPasswords();
+      }}
+      tintColor="#4ecdc4"
+    />
+  );
+
+  const listEmpty = (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="lock-open" size={64} color="#666" />
+      <Text style={styles.emptyText}>Nessuna password trovata</Text>
+      <Text style={styles.emptySubtext}>Aggiungi la tua prima password</Text>
+    </View>
   );
 
   if (loading) {
@@ -210,11 +367,23 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Password Manager</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity
+          {listClean ? (
+            <RNTouchableOpacity
+              style={styles.headerButton}
+              onPress={() => setReorderMode((v) => !v)}
+              accessibilityLabel="Modalita riordino"
+            >
+              <Ionicons
+                name={reorderMode ? 'checkmark-circle' : 'swap-vertical'}
+                size={24}
+                color={reorderMode ? '#4ecdc4' : '#666'}
+              />
+            </RNTouchableOpacity>
+          ) : null}
+          <RNTouchableOpacity
             testID="toggle-biometric-button"
             style={styles.headerButton}
             onPress={handleToggleBiometric}
@@ -224,8 +393,8 @@ export default function Home() {
               size={24}
               color={isBiometricEnabled ? '#4ecdc4' : '#666'}
             />
-          </TouchableOpacity>
-          <TouchableOpacity
+          </RNTouchableOpacity>
+          <RNTouchableOpacity
             testID="logout-button"
             style={styles.headerButton}
             onPress={() => {
@@ -234,11 +403,10 @@ export default function Home() {
             }}
           >
             <Ionicons name="log-out" size={24} color="#ff6b6b" />
-          </TouchableOpacity>
+          </RNTouchableOpacity>
         </View>
       </View>
 
-      {/* Search Bar */}
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
         <TextInput
@@ -247,65 +415,91 @@ export default function Home() {
           placeholderTextColor="#666"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          editable={!reorderMode}
         />
         {searchQuery ? (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
+          <RNTouchableOpacity onPress={() => setSearchQuery('')}>
             <Ionicons name="close-circle" size={20} color="#666" />
-          </TouchableOpacity>
+          </RNTouchableOpacity>
         ) : null}
       </View>
 
-      {/* Category Filter */}
-      <TouchableOpacity
-        style={styles.categorySelector}
-        onPress={() => setShowCategoryModal(true)}
+      <RNTouchableOpacity
+        style={[styles.categorySelector, reorderMode && styles.categorySelectorDisabled]}
+        onPress={() => {
+          if (reorderMode) return;
+          setShowCategoryModal(true);
+        }}
+        disabled={reorderMode}
       >
         <Ionicons name="filter" size={20} color="#4ecdc4" />
         <Text style={styles.categoryText}>{selectedCategory}</Text>
         <Ionicons name="chevron-down" size={20} color="#4ecdc4" />
-      </TouchableOpacity>
+      </RNTouchableOpacity>
 
-      {/* Password List */}
-      <FlatList
-        data={filteredPasswords}
-        renderItem={renderPasswordItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadPasswords();
-            }}
-            tintColor="#4ecdc4"
-          />
-        }
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="lock-open" size={64} color="#666" />
-            <Text style={styles.emptyText}>Nessuna password trovata</Text>
-            <Text style={styles.emptySubtext}>Aggiungi la tua prima password</Text>
-          </View>
-        }
-      />
+      {reorderMode ? (
+        <Text style={styles.reorderHint}>
+          Scorri la lista liberamente. Per spostare: tieni premuto ≡ (o la card), oppure usa ↑↓
+        </Text>
+      ) : null}
 
-      {/* Add Button */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => router.push('/add-password')}
-      >
-        <Ionicons name="add" size={32} color="#1a1a2e" />
-      </TouchableOpacity>
+      {isWeb ? (
+        <WebSortableList
+          data={filteredPasswords}
+          enabled={canReorder}
+          onDraggingChange={setDragging}
+          onDragEnd={(data) => {
+            if (!canReorder) return;
+            void persistOrder(data);
+          }}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item, index, isActive, DragHandle }) =>
+            renderCardBody(item, index, isActive, undefined, DragHandle)
+          }
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.listContainer}
+          scrollEnabled
+          refreshControl={listRefreshControl}
+          ListEmptyComponent={listEmpty}
+        />
+      ) : (
+        <DraggableFlatList
+          data={filteredPasswords}
+          onDragBegin={() => setDragging(true)}
+          onDragEnd={({ data }) => {
+            setDragging(false);
+            if (!canReorder) return;
+            void persistOrder(data);
+          }}
+          keyExtractor={(item) => item.id}
+          renderItem={renderNativeItem}
+          containerStyle={{ flex: 1 }}
+          contentContainerStyle={styles.listContainer}
+          activationDistance={canReorder ? 8 : 9999}
+          autoscrollSpeed={80}
+          autoscrollThreshold={60}
+          scrollEnabled={!dragging}
+          refreshControl={listRefreshControl}
+          ListEmptyComponent={listEmpty}
+        />
+      )}
 
-      {/* Category Modal */}
+      {!reorderMode ? (
+        <RNTouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/add-password')}
+        >
+          <Ionicons name="add" size={32} color="#1a1a2e" />
+        </RNTouchableOpacity>
+      ) : null}
+
       <Modal
         visible={showCategoryModal}
         transparent
         animationType="fade"
         onRequestClose={() => setShowCategoryModal(false)}
       >
-        <TouchableOpacity
+        <RNTouchableOpacity
           style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowCategoryModal(false)}
@@ -313,7 +507,7 @@ export default function Home() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Seleziona Categoria</Text>
             {categories.map((cat) => (
-              <TouchableOpacity
+              <RNTouchableOpacity
                 key={cat}
                 style={[
                   styles.categoryOption,
@@ -335,10 +529,10 @@ export default function Home() {
                 {selectedCategory === cat && (
                   <Ionicons name="checkmark" size={20} color="#4ecdc4" />
                 )}
-              </TouchableOpacity>
+              </RNTouchableOpacity>
             ))}
           </View>
-        </TouchableOpacity>
+        </RNTouchableOpacity>
       </Modal>
     </View>
   );
