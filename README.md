@@ -1,82 +1,79 @@
 # Password Manager
 
-Stack **autonomo**: API + nginx proprio + Cloudflare Tunnel.
-**Nessuna modifica** ai file di Activity Manager.
+Vault password sync — Expo PWA + FastAPI + MongoDB.
 
 URL: `https://password.colorsdev.tech`
 
-## Perché il Tunnel
+## Architettura (produzione)
 
-Sul VPS di AM le porte **80/443** sono già di nginx AM.  
-Un secondo nginx non può bindarle. Cloudflare Tunnel espone il sottodominio senza toccare AM.
+DNS su **GoDaddy** → VPS → **nginx Activity Manager** (conf in `/root/nginx-apps/`) + container API sulla rete Docker condivisa.
 
 ```
-App Expo → https://password.colorsdev.tech
+App / PWA → https://password.colorsdev.tech
                 │
-         Cloudflare Tunnel
+         GoDaddy DNS (A → VPS)
                 │
-     password-manager-nginx (reverse proxy dedicato)
-                │
-         password-manager:8000
+     nginx AM (80/443 + Let's Encrypt)
+      ├─ /           → /var/www/password-manager-web  (Expo export)
+      └─ /api/       → password-manager:8000
                 │
          Mongo (DB: password_manager)
 ```
 
+File chiave:
+- conf vhost: `backend/nginx/password.colorsdev.tech.conf` → sul VPS in `/root/nginx-apps/`
+- web statico: `/root/password-manager/web`
+- API: container `password-manager` su `backend_app-network`
+
 ## Setup una tantum
 
-### 1. DNS / Tunnel (Cloudflare Zero Trust)
+### 1. DNS (GoDaddy)
 
-1. Crea un Tunnel
-2. Public hostname: `password.colorsdev.tech` → `http://password-manager-nginx:80`
-3. Copia il token in `.env` come `CLOUDFLARE_TUNNEL_TOKEN`
+Record **A** per `password` (o `password.colorsdev.tech`) → IP del VPS.
 
 ### 2. Env backend sul server
 
 ```bash
-cd Password-Manager/backend
+cd /root/password-manager/backend
 cp .env.EMPTY .env
-# MONGO_URL = stesso di AM
+# MONGO_URL = stesso cluster di AM (X509)
 # DB_NAME=password_manager
-# SERVER_SECRET=...
-# CLOUDFLARE_TUNNEL_TOKEN=...
+# SERVER_SECRET=...lungo e random...
+# Certificati in ./certificate/ (client.pem + client-key.pem)
 ```
 
-### 3. Deploy (come AM)
+### 3. Nginx AM + certificato
 
-**PC:**
+1. Copia `password.colorsdev.tech.conf` in `/root/nginx-apps/`
+2. Mount web in compose AM: `/root/password-manager/web:/var/www/password-manager-web:ro`
+3. Certbot per `password.colorsdev.tech`
+4. Recreate/reload container `nginx` di AM
+
+### 4. Deploy da PC
+
 ```bat
-cd backend\bat
-BUILD-AND-PUSH.BAT
+cd backend\bat\deploy
+copy config.bat.example config.bat
+DEPLOY-ALL.BAT
 ```
 
-**Server:**
-```bash
-cd Password-Manager/backend
-docker compose pull
-docker compose up -d
-```
+Solo API: `DEPLOY-API.BAT`  
+Solo web: `DEPLOY-WEB.BAT`
 
-Activity Manager: **zero commit nginx**.
+Dettagli: `backend/bat/deploy/README.md`.
 
-## Frontend
+## Frontend (dev)
 
 ```bash
 cd frontend
 # EXPO_PUBLIC_BACKEND_URL=https://password.colorsdev.tech
+# oppure http://localhost:8000 in locale
 yarn install
 npx expo start
 ```
 
-## Se un giorno hai 80/443 libere
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.public.yml up -d
-```
-
-Serve certificato Let's Encrypt per `password.colorsdev.tech` e `nginx/nginx.conf`.
-
 ## Cosa commitare
 
-- Solo repo **Password Manager** (compose, nginx, bat, codice)
-- **Non** `.env`
-- Activity Manager: niente
+- Repo **Password Manager** (compose, nginx conf, bat, codice)
+- **Non** `.env`, certificati `.pem`, `deploy/config.bat`
+- Su Activity Manager: solo mount web + include `nginx-apps` (già previsti in compose)
