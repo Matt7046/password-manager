@@ -17,6 +17,6 @@ set "DEPLOY_NGINX_CONTAINER=nginx"
 set "DEPLOY_HUB_IMAGE=docker.io/matt7046/password-manager:1.0.0"
 
 rem Opzionale: chiave SSH
-rem set "DEPLOY_SSH_KEY=%USERPROFILE%\.ssh\id_rsa"
+rem set "DEPLOY_SSH_KEY=%USERPROFILE%\.ssh\id_ed25519"
 
 rem Skip: set DEPLOY_SKIP_BUILD=1 / DEPLOY_SKIP_PUSH=1 / DEPLOY_SKIP_SERVER=1 / DEPLOY_SKIP_EXPORT=1 / DEPLOY_SKIP_UPLOAD=1
