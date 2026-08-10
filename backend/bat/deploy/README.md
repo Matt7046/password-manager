@@ -3,7 +3,8 @@
 Flusso:
 
 1. **API** — build immagine Hub → push → sul VPS `pull` + `up --force-recreate` solo `password-manager`
-2. **WEB** — `expo export` → upload tar in `/root/password-manager/web` → reload nginx AM
+2. **WEB** — `expo export` → upload tar in `/root/password-manager/web` → reload nginx edge (colorsdev-site)
+
 
 ## Setup una tantum
 
@@ -37,7 +38,7 @@ DEPLOY-WEB.BAT
 ## Note
 
 - Sul VPS la rete Docker è tipicamente `backend_app-network` (`DEPLOY_COMPOSE_NETWORK`).
-- Il web è servito da nginx di Activity Manager (`/root/password-manager/web` montato).
+- Il web è servito da nginx **colorsdev-site** via `/var/www/root/password-manager/web`.
 - Per le modifiche solo frontend (UI) basta `DEPLOY-WEB.BAT`.
 - Per le modifiche solo `server.py` basta `DEPLOY-API.BAT`.
 - SSH: i comandi remoti usano `;` invece di `&&` (su Windows altrimenti docker parte in locale).

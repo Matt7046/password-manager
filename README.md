@@ -6,15 +6,15 @@ URL: `https://password.colorsdev.tech`
 
 ## Architettura (produzione)
 
-DNS su **GoDaddy** → VPS → **nginx Activity Manager** (conf in `/root/nginx-apps/`) + container API sulla rete Docker condivisa.
+DNS su **GoDaddy** → VPS → **nginx edge colorsdev-site** (conf in `/root/nginx-apps/`) + container API sulla rete Docker condivisa.
 
 ```
 App / PWA → https://password.colorsdev.tech
                 │
          GoDaddy DNS (A → VPS)
                 │
-     nginx AM (80/443 + Let's Encrypt)
-      ├─ /           → /var/www/password-manager-web  (Expo export)
+     nginx colorsdev-site (80/443 + Let's Encrypt)
+      ├─ /           → /var/www/root/password-manager/web  (Expo export)
       └─ /api/       → password-manager:8000
                 │
          Mongo (DB: password_manager)
@@ -22,7 +22,7 @@ App / PWA → https://password.colorsdev.tech
 
 File chiave:
 - conf vhost: `backend/nginx/password.colorsdev.tech.conf` → sul VPS in `/root/nginx-apps/`
-- web statico: `/root/password-manager/web`
+- web statico: `/root/password-manager/web` (in container `/var/www/root/password-manager/web`)
 - API: container `password-manager` su `backend_app-network`
 
 ## Setup una tantum
@@ -42,12 +42,13 @@ cp .env.EMPTY .env
 # Certificati in ./certificate/ (client.pem + client-key.pem)
 ```
 
-### 3. Nginx AM + certificato
+### 3. Nginx edge (colorsdev-site) + certificato
 
 1. Copia `password.colorsdev.tech.conf` in `/root/nginx-apps/`
-2. Mount web in compose AM: `/root/password-manager/web:/var/www/password-manager-web:ro`
+2. `path host /root/password-manager/web` (montato via `/root` → `/var/www/root` sull’edge)
 3. Certbot per `password.colorsdev.tech`
-4. Recreate/reload container `nginx` di AM
+4. `docker exec nginx nginx -s reload`  
+   (niente mount/recreate su Activity Manager)
 
 ### 4. Deploy da PC
 
@@ -76,4 +77,4 @@ npx expo start
 
 - Repo **Password Manager** (compose, nginx conf, bat, codice)
 - **Non** `.env`, certificati `.pem`, `deploy/config.bat`
-- Su Activity Manager: solo mount web + include `nginx-apps` (già previsti in compose)
+- Nuove app / vhost edge: repo **colorsdev-site** (`nginx/apps/`), non Activity Manager
