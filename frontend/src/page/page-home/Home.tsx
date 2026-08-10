@@ -8,6 +8,8 @@ import {
   RefreshControl,
   Modal,
   Platform,
+  Image,
+  Linking,
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -22,6 +24,10 @@ import DraggableFlatList, {
 } from 'react-native-draggable-flatlist';
 import WebSortableList, { WebDragHandleProps } from './WebSortableList';
 import { styles } from './Home.styles';
+
+const PERSONALITY_URL = 'https://colorsdev.tech/personality';
+
+const COLORSDEV_URL = 'https://colorsdev.tech/';
 
 export default function Home() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
@@ -367,9 +373,28 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
+      <RNTouchableOpacity
+        style={styles.brandHeader}
+        onPress={() => Linking.openURL(COLORSDEV_URL)}
+        accessibilityRole="link"
+        accessibilityLabel="colorsdev.tech"
+      >
+        <Image
+          source={{ uri: '/logo-colorsdev-v2.png' }}
+          style={styles.brandLogo}
+          resizeMode="contain"
+        />
+      </RNTouchableOpacity>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Password Manager</Text>
         <View style={styles.headerActions}>
+          <RNTouchableOpacity
+            style={styles.headerButton}
+            onPress={() => Linking.openURL(PERSONALITY_URL)}
+            accessibilityLabel="Analisi personalita"
+          >
+            <Ionicons name="color-wand-outline" size={22} color="#60a5fa" />
+          </RNTouchableOpacity>
           {listClean ? (
             <RNTouchableOpacity
               style={styles.headerButton}

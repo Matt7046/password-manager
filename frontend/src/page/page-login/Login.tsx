@@ -7,6 +7,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/contexts/AuthContext';
@@ -14,6 +16,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { showAlert } from '@/src/utils/alert';
 import { styles } from './Login.styles';
+
+const PERSONALITY_URL = 'https://colorsdev.tech/personality';
+
+const COLORSDEV_URL = 'https://colorsdev.tech/';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -131,6 +137,23 @@ export default function Login() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
+          <TouchableOpacity
+            style={styles.brandHeader}
+            onPress={() => Linking.openURL(COLORSDEV_URL)}
+            accessibilityRole="link"
+            accessibilityLabel="colorsdev.tech"
+          >
+            <Image
+              source={{ uri: '/logo-colorsdev-v2.png' }}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.brandName}>
+              <Text style={styles.brandPrefix}>colorsdev</Text>
+              <Text style={styles.brandSuffix}>.tech</Text>
+            </Text>
+          </TouchableOpacity>
+
           <View style={styles.iconContainer}>
             <Ionicons name="lock-closed" size={80} color="#4ecdc4" />
           </View>
@@ -214,6 +237,14 @@ export default function Login() {
           >
             <Ionicons name="person-add" size={20} color="#4ecdc4" />
             <Text style={styles.createAccountText}>Crea nuovo account</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.personalityLink}
+            onPress={() => Linking.openURL(PERSONALITY_URL)}
+            accessibilityRole="link"
+          >
+            <Text style={styles.personalityText}>Scopri l'analisi IA della personalità</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

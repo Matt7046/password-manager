@@ -11,12 +11,22 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#1a1a2e',
   },
+  brandHeader: {
+    alignItems: 'center',
+    paddingTop: 28,
+    paddingBottom: 4,
+  },
+  brandLogo: {
+    width: '100%',
+    maxWidth: 220,
+    height: 52,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: 16,
   },
   headerTitle: {

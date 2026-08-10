@@ -16,9 +16,25 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
+  brandHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  brandLogo: {
+    width: '100%',
+    maxWidth: 280,
+    height: 70,
+  },
+  brandName: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  brandPrefix: { color: '#e8eff7' },
+  brandSuffix: { color: '#60a5fa' },
   iconContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   title: {
     fontSize: 32,
@@ -88,6 +104,16 @@ export const styles = StyleSheet.create({
   },
   loginLinkText: {
     color: '#4ecdc4',
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  personalityLink: {
+    marginTop: 8,
+    alignItems: 'center',
+    padding: 8,
+  },
+  personalityText: {
+    color: '#60a5fa',
     fontSize: 14,
     textDecorationLine: 'underline',
   },
