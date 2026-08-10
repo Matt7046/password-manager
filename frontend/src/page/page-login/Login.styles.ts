@@ -25,25 +25,11 @@ export const styles = StyleSheet.create({
         }
       : {}),
   },
-  brandHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  brandLogo: {
+  appLogo: {
     width: '100%',
-    maxWidth: 280,
-    height: 70,
-  },
-  brandName: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  brandPrefix: { color: '#e8eff7' },
-  brandSuffix: { color: '#60a5fa' },
-  iconContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
+    height: 120,
+    marginBottom: 12,
+    alignSelf: 'center',
   },
   title: {
     fontSize: 32,

@@ -18,8 +18,6 @@ import { styles } from './Setup.styles';
 
 const PERSONALITY_URL = 'https://colorsdev.tech/personality';
 
-const COLORSDEV_URL = 'https://colorsdev.tech/';
-
 export default function Setup() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -83,28 +81,14 @@ export default function Setup() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.brandHeader}
-            onPress={() => Linking.openURL(COLORSDEV_URL)}
-            accessibilityRole="link"
-            accessibilityLabel="colorsdev.tech"
-          >
-            <Image
-              source={{ uri: '/logo-colorsdev-v2.png' }}
-              style={styles.brandLogo}
-              resizeMode="contain"
-            />
-            <Text style={styles.brandName}>
-              <Text style={styles.brandPrefix}>colorsdev</Text>
-              <Text style={styles.brandSuffix}>.tech</Text>
-            </Text>
-          </TouchableOpacity>
+          <Image
+            source={{ uri: '/logo-password-manager.png' }}
+            style={styles.appLogo}
+            resizeMode="contain"
+            accessibilityLabel="Password Manager"
+          />
 
-          <View style={styles.iconContainer}>
-            <Ionicons name="shield-checkmark" size={80} color="#4ecdc4" />
-          </View>
-
-          <Text style={styles.title}>Nuovo account</Text>
+          <Text style={styles.title}>Password Manager</Text>
           <Text style={styles.subtitle}>
             Crea un vault con la tua email. Ogni account ha le proprie password.
           </Text>

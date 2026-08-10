@@ -8,7 +8,6 @@ import {
   RefreshControl,
   Modal,
   Platform,
-  Image,
   Linking,
 } from 'react-native';
 import { TouchableOpacity } from 'react-native-gesture-handler';
@@ -26,8 +25,6 @@ import WebSortableList, { WebDragHandleProps } from './WebSortableList';
 import { styles } from './Home.styles';
 
 const PERSONALITY_URL = 'https://colorsdev.tech/personality';
-
-const COLORSDEV_URL = 'https://colorsdev.tech/';
 
 export default function Home() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
@@ -373,18 +370,6 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
-      <RNTouchableOpacity
-        style={styles.brandHeader}
-        onPress={() => Linking.openURL(COLORSDEV_URL)}
-        accessibilityRole="link"
-        accessibilityLabel="colorsdev.tech"
-      >
-        <Image
-          source={{ uri: '/logo-colorsdev-v2.png' }}
-          style={styles.brandLogo}
-          resizeMode="contain"
-        />
-      </RNTouchableOpacity>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Password Manager</Text>
         <View style={styles.headerActions}>
